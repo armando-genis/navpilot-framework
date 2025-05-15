@@ -1,0 +1,23 @@
+services:
+  navpilot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: navpilot_image
+    container_name: navpilot_container
+
+    # if you have a graphics card, uncomment the following lines
+
+    command: tail -f /dev/null     # keeps the container running
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+    volumes:
+      - ./workspace:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    shm_size: 30g
+    tty: true
+    stdin_open: true
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+      - 8.8.8.8
