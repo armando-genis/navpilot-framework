@@ -1,0 +1,12 @@
+# git files
+/workspace/tec_openhouse_raw/
+/workspace/navpilot_ws/build/
+/workspace/navpilot_ws/install/
+/workspace/navpilot_ws/log/
+
+
+/workspace/navpilot_ws/src/mapping_modules/LIO-SAM/
+/workspace/navpilot_ws/src/sensor_stack/vectornav
+/workspace/navpilot_ws/src/sensor_stack/velodyne
+/workspace/navpilot_ws/src/localization_modules/lidar_localization_ros2
+/workspace/navpilot_ws/src/localization_modules/ndt_omp_ros2
