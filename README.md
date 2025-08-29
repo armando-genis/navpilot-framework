@@ -50,6 +50,12 @@ Run the following commands to initialize mapping processes:
 ros2 launch /workspace/navpilot_ws/src/mapping_modules/launcher/mapping.launch.py
 ```
 
+## → 🌏 Launchers for localization
+Run the following commands to initialize mapping processes:
+```bash
+ros2 launch /workspace/navpilot_ws/src/localization_modules/launch/localization.launch.py
+```
+
 ## → 📢 Code Modifications Before colcon build
 Before building the package, make the following changes to the file lidar_localization_component.cpp located in the src directory of lidar_localization_ros2. These adjustments will modify the default subscriber topics to match the correct topics of the car. 
 Navigate to `lidar_localization_ros2/src/lidar_localization_component.cpp` and change the lines 234 and 238 for this ones:
@@ -63,3 +69,19 @@ Navigate to `lidar_localization_ros2/src/lidar_localization_component.cpp` and c
       "vectornav/imu", rclcpp::SensorDataQoS(),
       std::bind(&PCLLocalization::imuReceived, this, std::placeholders::_1));
 ```
+
+
+## record rosbag mcap
+
+```bash
+ros2 bag record --storage mcap --all --output vanttec_sdv_localization_20250623 
+```
+
+## play a ros bag 
+
+```bash
+rviz2 -d /workspace/navpilot_ws/src/localization_modules/launch/localization.rviz
+
+ros2 bag play vanttec_sdv_localization_20250623 -s mcap
+```
+

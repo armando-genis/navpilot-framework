@@ -2,7 +2,7 @@ pointcloud_rotation_node:
   ros__parameters:
     pointcloud_topic: "/velodyne_points"
     output_topic: "/points_rotated"
-    output_topic_ground: "/velodyne_points_rotated_notground"
+    output_topic_ground: "/points_rotated_notground"
     sensor_rotation_y_: 0.20944   #0.174533
     voxel_condition: true
     roi_max_x_: 10.0
@@ -20,11 +20,3 @@ pointcloud_rotation_node:
     th_seeds_: 0.3
     th_dist_: 0.3
     sensor_height_: 1.93
-
-
-lidar_imu_fusion_node: 
-  ros__parameters:
-    lidar_topic_in_: "/points_rotated"
-    imu_topic_in_: "/vectornav/imu"
-    lidar_topic_out_: "/points_fusion"
-    imu_topic_out_: "/imu_fusion"

@@ -1,8 +1,8 @@
 pointcloud_rotation_node:
   ros__parameters:
     pointcloud_topic: "/velodyne_points"
-    output_topic: "/velodyne_points_rotated"
-    output_topic_ground: "/velodyne_points_rotated_ground"
+    output_topic: "/points_rotated"
+    output_topic_ground: "/velodyne_points_rotated_notground"
     sensor_rotation_y_: 0.20944   #0.174533
     voxel_condition: true
     roi_max_x_: 10.0

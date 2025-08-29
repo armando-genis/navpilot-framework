@@ -6,18 +6,43 @@ services:
     image: navpilot_image
     container_name: navpilot_container
 
-    # if you have a graphics card, uncomment the following lines
-
-    command: tail -f /dev/null     # keeps the container running
-    environment:
-      - DISPLAY=${DISPLAY:-:0}
-    volumes:
-      - ./workspace:/workspace
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    shm_size: 30g
-    tty: true
-    stdin_open: true
     dns:
       - 1.1.1.1
       - 1.0.0.1
       - 8.8.8.8
+
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+
+    volumes:
+      - ./workspace:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+
+    ports:
+      - "8765:8765"
+
+    tty: true
+    stdin_open: true
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 40g
+
+    networks:
+      default: {}
+      lidar_net:
+        ipv4_address: 192.168.1.100   # static IP for LiDAR access 
+
+networks:
+  default:
+    driver: bridge
+
+  lidar_net:
+    driver: macvlan
+    driver_opts:
+      parent: enp2s0
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1

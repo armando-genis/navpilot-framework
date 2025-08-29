@@ -194,4 +194,3 @@ RUN cp map_point.svg /opt/ros/humble/share/rviz_default_plugins/icons/classes/Pu
 # Set up workspace
 WORKDIR /workspace
 ENV PATH="/root/.local/bin:${PATH}"
-

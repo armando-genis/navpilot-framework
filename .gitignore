@@ -1,5 +1,15 @@
 # git files
 /workspace/tec_openhouse_raw/
+/workspace/tec_openhouse_proccesed/
+/workspace/ros2-gl-viewer/
+/workspace/vanttec_sdv_localization_20250623/
+/workspace/ros2_orza/
+/workspace/vanttec_16jun_4/
+
+
+
+
+
 /workspace/navpilot_ws/build/
 /workspace/navpilot_ws/install/
 /workspace/navpilot_ws/log/
