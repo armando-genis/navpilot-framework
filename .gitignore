@@ -6,14 +6,9 @@
 /workspace/ros2_orza/
 /workspace/vanttec_16jun_4/
 
-
-
-
-
 /workspace/navpilot_ws/build/
 /workspace/navpilot_ws/install/
 /workspace/navpilot_ws/log/
-
 
 /workspace/navpilot_ws/src/mapping_modules/LIO-SAM/
 /workspace/navpilot_ws/src/sensor_stack/vectornav

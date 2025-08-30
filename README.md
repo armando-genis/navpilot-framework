@@ -85,3 +85,35 @@ rviz2 -d /workspace/navpilot_ws/src/localization_modules/launch/localization.rvi
 ros2 bag play vanttec_sdv_localization_20250623 -s mcap
 ```
 
+
+
+## TODO:
+- add this to the setup.sh
+git clone https://github.com/KIT-MRT/mrt_cmake_modules.git
+- to build it:
+
+colcon build --packages-select mrt_cmake_modules
+colcon build --packages-select polygon_msgs 
+colcon build --packages-select polygon_rviz_plugins
+colcon build --packages-select polygon_demos 
+colcon build --packages-select polygon_utils 
+colcon build --packages-select traffic_information_msgs
+source install/setup.bash
+colcon build --packages-select lanelet2_core
+colcon build --packages-select lanelet2_maps
+colcon build --packages-select lanelet2_io
+colcon build --packages-select lanelet2_projection
+colcon build --packages-select lanelet2_traffic_rules
+colcon build --packages-select lanelet2_routing
+colcon build --packages-select lanelet2_validation
+colcon build --packages-select lanelet2_python
+colcon build --packages-select lanelet2_examples
+
+colcon build --packages-select map_visualizer
+
+
+
+
+
+
+
