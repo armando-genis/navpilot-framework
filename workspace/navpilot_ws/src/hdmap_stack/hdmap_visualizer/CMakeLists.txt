@@ -29,8 +29,9 @@ find_package(lanelet2_traffic_rules)
 find_package(lanelet2_validation)
 find_package(polygon_msgs REQUIRED)
 find_package(traffic_information_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
-set(dep_osm "rclcpp" "visualization_msgs" "Eigen3" "lanelet2_core" "lanelet2_io" "lanelet2_maps" "lanelet2_validation" "lanelet2_routing" "lanelet2_projection" "lanelet2_traffic_rules" "polygon_msgs" "traffic_information_msgs")
+set(dep_osm "rclcpp" "visualization_msgs" "Eigen3" "lanelet2_core" "lanelet2_io" "lanelet2_maps" "lanelet2_validation" "lanelet2_routing" "lanelet2_projection" "lanelet2_traffic_rules" "polygon_msgs" "traffic_information_msgs" "nav_msgs")
 
 include_directories(include())
 
@@ -97,6 +98,11 @@ install(TARGETS occupancy_pub
 
 install(
   DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
   

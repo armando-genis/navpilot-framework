@@ -1,0 +1,10 @@
+pointcloud_clustering_node:
+  ros__parameters:
+    GROUND_THRESHOLD: 0.03
+    CLUSTER_THRESH: 0.7
+    CLUSTER_MAX_SIZE: 4000
+    CLUSTER_MIN_SIZE: 10
+    USE_PCA_BOX: false
+    DISPLACEMENT_THRESH: 1.2
+    IOU_THRESH: 0.7
+    USE_TRACKING: true

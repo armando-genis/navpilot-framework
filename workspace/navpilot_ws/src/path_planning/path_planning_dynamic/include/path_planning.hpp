@@ -1,0 +1,266 @@
+#ifndef PATH_PLANNING_HPP
+#define PATH_PLANNING_HPP
+
+#include <rclcpp/rclcpp.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/bool.hpp>
+
+// path nav msgs
+#include <nav_msgs/msg/path.hpp>
+
+// tf
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
+// Custom msgs obstacles_information_msgs for Obstacle and ObstacleCollection
+#include "obstacles_information_msgs/msg/obstacle.hpp"
+#include "obstacles_information_msgs/msg/obstacle_collection.hpp"
+
+// Custom msgs traffic_information_msgs for RoadElements and RoadElementsCollection
+#include "traffic_information_msgs/msg/road_elements.hpp"
+#include "traffic_information_msgs/msg/road_elements_collection.hpp"
+
+// tinyspline
+#include <tinysplinecxx.h>
+
+// STA collision checker
+#include "sat_collision_checker.h"
+
+// Car Data
+#include "CarData.h"
+
+// State
+#include "State.h"
+
+// Grid map
+#include "Grid_map.h"
+
+// Node
+#include "Node.h"
+
+// C++
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <cmath>
+#include <utility>
+
+// FlatNode and TreeFlat for the flat tree
+struct FlatNode {
+  State state;          // last state of this segment
+  int   parent;         // index in `nodes` (-1 for root)
+  double cost;          // cumulative path cost (fill as you like)
+  double steer;         // steering used to reach this node (segment command)
+  int    dir;           // direction used to reach this node (segment command)
+  uint16_t depth;       // depth from root
+};
+
+struct TreeFlat {
+  std::vector<FlatNode> nodes;   // flat storage of all nodes
+  std::vector<int>      leaves;  // indices of leaf nodes in `nodes`
+};
+
+static constexpr int    HEADING_BINS  = 64;
+static constexpr double TWO_PI        = 6.28318530717958647692;
+static constexpr double PI            = 3.14159265358979323846;
+
+
+// Wrap to (-pi, pi]
+static inline double wrapAngle(double a) {
+    while (a >  PI) a -= TWO_PI;
+    while (a <=-PI) a += TWO_PI;
+    return a;
+}
+
+// Key for "same discrete state" at this resolution
+struct LatticeKey {
+    int gx, gy, hb;
+    bool operator==(const LatticeKey& o) const noexcept {
+        return gx==o.gx && gy==o.gy && hb==o.hb;
+    }
+};
+struct LatticeKeyHash {
+    size_t operator()(const LatticeKey& k) const noexcept {
+        // 64-bit mix
+        uint64_t x = (uint64_t)(uint32_t)k.gx;
+        uint64_t y = (uint64_t)(uint32_t)k.gy;
+        uint64_t h = (uint64_t)(uint32_t)k.hb;
+        uint64_t z = (x * 0x9E3779B185EBCA87ULL) ^ (y << 6) ^ (y >> 2) ^ (h * 0xC2B2AE3D27D4EB4FULL);
+        return (size_t)z;
+    }
+};
+
+// Item in OPEN (min-heap by f)
+struct PQItem {
+    int idx;         // index in out.nodes
+    double f_est;    // g + h_lb at push time
+    double g_copy;   // g used to create this item (for staleness check)
+    bool operator<(const PQItem& o) const noexcept {
+        // std::priority_queue is max-heap, so invert
+        return f_est > o.f_est;
+    }
+};
+
+// Compute heading bin
+static inline int heading_bin(double theta) {
+    double t = wrapAngle(theta) + PI;                // [0, 2pi)
+    double w = TWO_PI / (double)HEADING_BINS;
+    int b = (int)std::floor(t / w);
+    if (b < 0) b = 0;
+    if (b >= HEADING_BINS) b = HEADING_BINS - 1;
+    return b;
+}
+
+class path_planning : public rclcpp::Node
+{
+private:
+    // colors for the terminal
+    std::string green = "\033[1;32m";
+    std::string red = "\033[1;31m";
+    std::string blue = "\033[1;34m";
+    std::string yellow = "\033[1;33m";
+    std::string purple = "\033[1;35m";
+    std::string reset = "\033[0m";
+
+    // tf2 buffer & listener
+    tf2_ros::Buffer tf2_buffer;
+    tf2_ros::TransformListener tf2_listener;
+
+    fop::SATCollisionChecker collision_checker; // Collision checker
+
+    // Car Data
+    CarData car_data_;
+    double maxSteerAngle;
+    double wheelBase;
+    double axleToFront;
+    double axleToBack;
+    double width;
+
+    // Grid Map
+    std::shared_ptr<Grid_map> grid_map_;
+
+    // State
+    std::shared_ptr<State> car_state_;
+
+    // global map and rescaled chunk 
+    std::shared_ptr<nav_msgs::msg::OccupancyGrid> global_map_;
+    std::shared_ptr<nav_msgs::msg::OccupancyGrid> rescaled_chunk_;
+
+    // function to get the state (position) of the car
+    void getCurrentRobotState();
+
+    // =============================
+    // map combination and convine with the map obstacles
+    // =============================
+
+    // subscription for the global map
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr global_grid_map_sub_;
+    void globalMap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr map);
+    // subscription for the obstacle information
+    rclcpp::Subscription<obstacles_information_msgs::msg::ObstacleCollection>::SharedPtr obstacle_info_subscription_;
+    void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
+    // offset for the origin of the map chunk
+    double forward_distance = 10.0;
+    double forward_distance_square = 2.0; // this is for the white sqaure that ocloude the obstacles draw in the new map
+    int chunk_size = 100;
+    int chunk_radius = chunk_size / 2;
+    double scale_factor = 1; // if the map resolution is 1.0 is a scale factor of 5 and if the map resolution is 0.2 the salce resultion shoudl be 1.
+    void map_combination(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
+    cv::Mat toMat(const nav_msgs::msg::OccupancyGrid &map);
+    cv::Mat rescaleChunk(const cv::Mat &chunk_mat, double scale_factor);
+    // publisher for the occupancy grid 
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_pub_test_;
+    
+    // =============================
+    // path prossecing and car dynamics
+    // =============================
+
+    // function to get the motion commands
+    void motionCommands();
+    std::vector<std::vector<double>> motionCommand; // [steering angle, direction]
+
+    // variables for the path prossecing and car dynamics
+    int pathLength; // (int): number of micro-steps per edge/primitive.
+    double step_car;  // (m): distance advanced per micro-step.
+    
+    // tree structure parameters
+    int tree_depth;        // Maximum depth of the tree (e.g., 3 levels)
+    int branching_factor;  // Number of paths per node (e.g., 5)
+
+    // white square parameters
+    int square_size = 20; // Size of the square region in grid cells
+    int half_square = square_size / 2;
+
+    std::shared_ptr<planner::Node> current_node;
+
+    // subcrition for the graph of the lane elements
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr full_graph_publisher_sub_;
+    void full_graph_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
+    std::shared_ptr<visualization_msgs::msg::MarkerArray> full_graph_;
+
+    // visualization functions
+    void clearAllMarkers();
+
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_nodes_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
+
+    struct RelSample { double x, y, heading; };
+    std::vector<std::vector<RelSample>> precomputed_rel_; // [cmd][step]
+    void precomputeCommandSamples();
+    void publishRealTrajectoriesFromFlat(const TreeFlat& flat);
+
+    TreeFlat generateTrajectoryTree_flat(const State& root_state);
+
+    // ---- scoring weights (tune as needed) ----
+    double W_FORWARD = 1.0;   // maximize forward progress
+    double W_LAT     = 0.3;   // penalize lateral offset from current heading axis
+    double W_STEER   = 0.1;   // penalize steering effort (sum |steer| along chain)
+    double W_HEAD    = 0.2;   // penalize heading error vs current heading (or goal)
+
+    cv::Mat dist_m_; // distance matrix for the A* algorithm
+
+    double SAFE_CLEAR = 0.8;    // meters: half vehicle width + margin
+    double W_OBS      = 1.2;    // weight for clearance penalty
+    double W_DSTEER   = 0.05;   // weight for smoothness (|Δsteer|)
+
+    // Build chain indices root->leaf
+    inline void build_chain_indices(const TreeFlat& flat, int leaf_idx, std::vector<int>& chain) const;
+
+    // Score one leaf using flat data only
+    double score_leaf(const TreeFlat& flat, int leaf_idx, const State& start) const;
+
+    // Pick the best leaf (min cost)
+    int select_best_leaf(const TreeFlat& flat, const State& start) const;
+
+    // Materialize only ONE leaf chain back into shared_ptr<planner::Node>
+    std::shared_ptr<planner::Node> materialize_one_leaf_chain(const TreeFlat& flat, int leaf_idx);
+
+    // publish the best path from the flat tree
+    void publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, int color_idx);
+
+
+    // generate the trajectory based on the A* algorithm
+    int generateTrajectoryTree_AStar_flat(const State& root_state, TreeFlat& out);
+
+    // generate the trajectory based on the flat tree
+    int generateTrajectoryTree_AStar_flat_map(const State& root_state, TreeFlat& out);
+    void buildDistanceField();
+    double clearanceMeters(int gx, int gy) const;
+
+public:
+    path_planning();
+    ~path_planning();
+};
+
+#endif
+
+

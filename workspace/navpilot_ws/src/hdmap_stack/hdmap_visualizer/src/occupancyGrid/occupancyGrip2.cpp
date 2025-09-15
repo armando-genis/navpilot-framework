@@ -13,7 +13,7 @@ public:
     OccupancyGridPublisher() : Node("occupancy_grid_publisher")
     {
         osm_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>("/array", 10, std::bind(&OccupancyGridPublisher::float64MultiArrayCallback, this, std::placeholders::_1));
-        occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("occupancy_grid_complete_map", 10);
+        occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("occupancy_grid_complete_map_1", 10);
         timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&OccupancyGridPublisher::publishOccupancyGrid, this));
         RCLCPP_INFO(this->get_logger(), "\033[1;32m----> occupancy_grid_publisher_node initialized.\033[0m");
     }

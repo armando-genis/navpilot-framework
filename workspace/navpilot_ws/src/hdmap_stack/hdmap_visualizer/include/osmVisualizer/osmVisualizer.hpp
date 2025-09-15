@@ -3,9 +3,17 @@
 #include <memory>
 #include <string>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <numeric>
+#include <utility>
+#include <vector>
 #include "rclcpp/rclcpp.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 // lanelet libraries
 #include <lanelet2_io/Io.h>
@@ -51,13 +59,26 @@ private:
   void fill_marker(lanelet::LaneletMapPtr &t_map);
   void fill_array(lanelet::LaneletMapPtr &t_map);
   void fill_array_with_left_right(lanelet::LaneletMapPtr &t_map);
+  void generateOccupancyGrid(lanelet::LaneletMapPtr &t_map);
+  void publishOccupancyGrid();
   double getDistance(const lanelet::ConstLanelet &ll, size_t i);
+  
+  // Occupancy grid helper functions
+  void worldToGrid(double wx, double wy, double min_x, double min_y, int &gx, int &gy) const;
+  void drawLine(int x0, int y0, int x1, int y1, int width, int height, std::vector<int8_t> &data, int8_t value) const;
+  void morphClose(std::vector<int8_t> &data, int width, int height, int radius, int iters) const;
+  void fillLaneletPolygon(const std::vector<lanelet::ConstPoint3d> &points, int width, int height, 
+                         double min_x, double min_y, std::vector<int8_t> &grid, int8_t value) const;
+  void floodFill(std::vector<int8_t> &grid, int width, int height, int start_x, int start_y, int8_t fill_value) const;
+  void floodFillInterior(std::vector<int8_t> &grid, int width, int height, int start_x, int start_y, int8_t fill_value) const;
+  bool isPointInPolygon(int px, int py, const std::vector<std::pair<int, int>>& polygon) const;
 
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr array_publisher_;
   rclcpp::Publisher<polygon_msgs::msg::Polygon2DCollection>::SharedPtr polygon_publisher_;
   rclcpp::Publisher<traffic_information_msgs::msg::RoadElementsCollection>::SharedPtr road_elements_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr occupancy_grid_publisher_;
 
   std_msgs::msg::Float64MultiArray m_array;
   visualization_msgs::msg::MarkerArray m_marker_array;
@@ -85,4 +106,17 @@ private:
 
   double x_offset_;
   double y_offset_;
+  
+  // Occupancy grid parameters
+  double resolution_;
+  int close_radius_ = 1;
+  int close_iters_ = 1;
+  int outside_value_;
+  std::string frame_id_;
+  std::string occupancy_output_topic_;
+  
+  // Occupancy grid data
+  nav_msgs::msg::OccupancyGrid occupancy_grid_;
+  bool occupancy_grid_ready_;
+  bool occupancy_dirty_;
 };

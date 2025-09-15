@@ -1,0 +1,16 @@
+# Occupancy Grid Parameters for OsmVisualizer
+# Resolution of the occupancy grid in meters per cell
+resolution: 0.20
+
+# Morphological closing parameters to seal gaps
+close_radius: 0 # Radius for morphological operations (cells) - set to 0 to disable
+close_iters: 0 # Number of iterations for morphological closing - set to 0 to disable
+
+# Value for areas outside lanelets
+outside_value: 100 # 100 = occupied, -1 = unknown, 0 = free
+
+# Frame ID for the occupancy grid
+frame_id: "map"
+
+# Output topic for the occupancy grid
+occupancy_output_topic: "occupancy_grid_complete_map"

@@ -5,16 +5,38 @@ OsmVisualizer::OsmVisualizer() : Node("OsmVisualizer")
   this->declare_parameter("map_path", "/home/atakan/Downloads/Town10.osm");
   this->declare_parameter("enable_inc_path_points", true);
   this->declare_parameter("interval", 2.0);
-
+  
+  // Occupancy grid parameters
+  this->declare_parameter("resolution", 0.20);
+  this->declare_parameter("close_radius", 0);
+  this->declare_parameter("close_iters", 0);
+  this->declare_parameter("outside_value", 100);
+  this->declare_parameter("frame_id", "map");
+  this->declare_parameter("occupancy_output_topic", "occupancy_grid_complete_map");
 
   x_offset_ = 0.0;
   y_offset_ = 25.0;
+  
+  // Initialize occupancy grid parameters
+  resolution_ = this->get_parameter("resolution").as_double();
+  close_radius_ = this->get_parameter("close_radius").as_int();
+  close_iters_ = this->get_parameter("close_iters").as_int();
+  outside_value_ = this->get_parameter("outside_value").as_int();
+  frame_id_ = this->get_parameter("frame_id").as_string();
+  occupancy_output_topic_ = this->get_parameter("occupancy_output_topic").as_string();
+  
+  // Clamp outside value to valid range
+  outside_value_ = std::max(-1, std::min(100, outside_value_));
+  
+  occupancy_grid_ready_ = false;
+  occupancy_dirty_ = false;
 
   if (!readParameters())
     rclcpp::shutdown();
 
   publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/hd_map", 10);
   array_publisher_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/array", 10);
+  occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/occupancy_grid_complete_map_2", rclcpp::SystemDefaultsQoS());
   timer_ = this->create_wall_timer(200ms, std::bind(&OsmVisualizer::timer_callback, this));
 
   polygon_publisher_ = this->create_publisher<polygon_msgs::msg::Polygon2DCollection>("/crosswalk_polygons", 10);
@@ -40,6 +62,7 @@ OsmVisualizer::OsmVisualizer() : Node("OsmVisualizer")
   RCLCPP_INFO(this->get_logger(), "\033[1;32m----> OsmVisualizer_node initialized.\033[0m");
   fill_marker(map);
   fill_array_with_left_right(map);
+  generateOccupancyGrid(map);
 }
 
 bool OsmVisualizer::readParameters()
@@ -76,6 +99,12 @@ void OsmVisualizer::timer_callback()
     array_publisher_->publish(m_array);
     m_second = false;
   }
+  
+  // publish occupancy grid
+  if (occupancy_grid_ready_)
+  {
+    publishOccupancyGrid();
+  }
 
   if (!crosswalk_polygons.polygons.empty())
   {
@@ -93,41 +122,6 @@ void OsmVisualizer::timer_callback()
   }
 }
 
-void OsmVisualizer::fill_array(lanelet::LaneletMapPtr &t_map)
-{
-  m_array.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
-  m_array.layout.dim[0].label = "rows";
-  m_array.layout.dim[0].size = 100000;
-  m_array.layout.dim[0].stride = 100000 * 2;
-  m_array.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
-  m_array.layout.dim[1].label = "cols";
-  m_array.layout.dim[1].size = 2;
-  m_array.layout.dim[1].stride = 2;
-
-  for (const auto &ll : t_map->laneletLayer)
-  {
-    for (size_t i = 0; i < ll.centerline2d().size() - 1; i++)
-    {
-      if (getDistance(ll, i) > 2 && enable_inc_path_points_)
-      {
-        double dist = getDistance(ll, i);
-        double interval = 1;
-        int num_points = dist / interval;
-
-        for (int k = 0; k < num_points; k++)
-        {
-          m_array.data.push_back(((ll.centerline2d()[i + 1].x() - ll.centerline2d()[i].x()) / num_points) * k + ll.centerline2d()[i].x());
-          m_array.data.push_back(((ll.centerline2d()[i + 1].y() - ll.centerline2d()[i].y()) / num_points) * k + ll.centerline2d()[i].y());
-        }
-      }
-      else
-      {
-        m_array.data.push_back(ll.centerline2d()[i].x());
-        m_array.data.push_back(ll.centerline2d()[i].y());
-      }
-    }
-  }
-}
 
 void OsmVisualizer::writeToFile(const std_msgs::msg::Float64MultiArray &multi_array)
 {
@@ -158,7 +152,7 @@ void OsmVisualizer::fill_array_with_left_right(lanelet::LaneletMapPtr &t_map)
   m_array.layout.dim[1].stride = 4;
 
   // Define an interpolation interval (distance between each interpolated point)
-  double interval = 0.5; // Adjust this value based on your map resolution and needs
+  double interval = 0.1; // Adjust this value based on your map resolution and needs
 
   for (const auto &ll : t_map->laneletLayer)
   {
@@ -489,4 +483,259 @@ void OsmVisualizer::fill_marker(lanelet::LaneletMapPtr &t_map)
   }
   std::cout << blue << "----> Number of crosswalk lanelets: " << crosswalk_count << reset << std::endl;
   std::cout << blue << "----> Number of road elements: " << road_element_count << reset << std::endl;
+}
+
+void OsmVisualizer::generateOccupancyGrid(lanelet::LaneletMapPtr &t_map)
+{
+  RCLCPP_INFO(this->get_logger(), "Generating occupancy grid from lanelets...");
+  
+  // 1) Compute bounding box from all lanelet points
+  double min_x = std::numeric_limits<double>::infinity();
+  double min_y = std::numeric_limits<double>::infinity();
+  double max_x = -std::numeric_limits<double>::infinity();
+  double max_y = -std::numeric_limits<double>::infinity();
+
+  auto updateBounds = [&](double x, double y) {
+    if (x < min_x) min_x = x;
+    if (x > max_x) max_x = x;
+    if (y < min_y) min_y = y;
+    if (y > max_y) max_y = y;
+  };
+
+  // Get bounds from all lanelets (excluding crosswalks)
+  for (const auto &ll : t_map->laneletLayer)
+  {
+    // Skip crosswalks for occupancy grid
+    if (ll.hasAttribute(lanelet::AttributeName::Subtype) &&
+        ll.attribute(lanelet::AttributeName::Subtype).value() == lanelet::AttributeValueString::Crosswalk)
+    {
+      continue;
+    }
+
+    // Update bounds with left and right boundary points
+    for (const auto &point : ll.leftBound())
+    {
+      updateBounds(point.x(), point.y());
+    }
+    for (const auto &point : ll.rightBound())
+    {
+      updateBounds(point.x(), point.y());
+    }
+  }
+
+  if (!std::isfinite(min_x) || !std::isfinite(min_y) || !std::isfinite(max_x) || !std::isfinite(max_y))
+  {
+    RCLCPP_WARN(this->get_logger(), "Invalid bounds computed; skipping occupancy grid generation.");
+    return;
+  }
+
+  // 2) Calculate grid dimensions
+  int width = static_cast<int>(std::ceil((max_x - min_x) / resolution_)) + 1;
+  int height = static_cast<int>(std::ceil((max_y - min_y) / resolution_)) + 1;
+  width = std::max(1, width);
+  height = std::max(1, height);
+
+  RCLCPP_INFO(this->get_logger(), "Grid dimensions: %dx%d, resolution: %.3f", width, height, resolution_);
+
+  // 3) Initialize grid with outside value (occupied/unknown)
+  std::vector<int8_t> grid(width * height, static_cast<int8_t>(outside_value_));
+
+  // 4) Fill lanelet polygons with free space (0)
+  for (const auto &ll : t_map->laneletLayer)
+  {
+    // Skip crosswalks for occupancy grid
+    if (ll.hasAttribute(lanelet::AttributeName::Subtype) &&
+        ll.attribute(lanelet::AttributeName::Subtype).value() == lanelet::AttributeValueString::Crosswalk)
+    {
+      continue;
+    }
+
+    // Create polygon from lanelet boundaries
+    std::vector<lanelet::ConstPoint3d> polygon_points;
+    
+    // Add left boundary points
+    for (const auto &point : ll.leftBound())
+    {
+      polygon_points.push_back(point);
+    }
+    
+    // Add right boundary points in reverse order
+    const auto &right_bound = ll.rightBound();
+    for (int i = right_bound.size() - 1; i >= 0; --i)
+    {
+      polygon_points.push_back(right_bound[i]);
+    }
+    
+    // Close the polygon
+    if (!polygon_points.empty())
+    {
+      polygon_points.push_back(polygon_points[0]);
+    }
+
+    // Fill the polygon with free space
+    fillLaneletPolygon(polygon_points, width, height, min_x, min_y, grid, 0);
+  }
+
+  // 5) Apply morphological closing to seal gaps
+  if (close_radius_ > 0 && close_iters_ > 0)
+  {
+    morphClose(grid, width, height, close_radius_, close_iters_);
+  }
+
+  // 6) Fill occupancy grid message
+  occupancy_grid_.header.stamp = now();
+  occupancy_grid_.header.frame_id = frame_id_;
+  occupancy_grid_.info.map_load_time = occupancy_grid_.header.stamp;
+  occupancy_grid_.info.resolution = static_cast<float>(resolution_);
+  occupancy_grid_.info.width = static_cast<uint32_t>(width);
+  occupancy_grid_.info.height = static_cast<uint32_t>(height);
+  occupancy_grid_.info.origin.position.x = min_x;
+  occupancy_grid_.info.origin.position.y = min_y;
+  occupancy_grid_.info.origin.position.z = 0.0;
+  occupancy_grid_.info.origin.orientation.w = 1.0;
+
+  occupancy_grid_.data = std::move(grid);
+  occupancy_grid_ready_ = true;
+  occupancy_dirty_ = true;
+
+  RCLCPP_INFO(this->get_logger(), "Occupancy grid generated successfully!");
+}
+
+void OsmVisualizer::publishOccupancyGrid()
+{
+  if (occupancy_grid_ready_)
+  {
+    occupancy_grid_publisher_->publish(occupancy_grid_);
+    occupancy_dirty_ = false;
+  }
+}
+
+void OsmVisualizer::worldToGrid(double wx, double wy, double min_x, double min_y, int &gx, int &gy) const
+{
+  gx = static_cast<int>(std::floor((wx - min_x) / resolution_));
+  gy = static_cast<int>(std::floor((wy - min_y) / resolution_));
+}
+
+void OsmVisualizer::drawLine(int x0, int y0, int x1, int y1, int width, int height,
+                             std::vector<int8_t> &data, int8_t value) const
+{
+  auto inBounds = [&](int x, int y) { return x >= 0 && x < width && y >= 0 && y < height; };
+  
+  int dx = std::abs(x1 - x0), sx = (x0 < x1) ? 1 : -1;
+  int dy = -std::abs(y1 - y0), sy = (y0 < y1) ? 1 : -1;
+  int err = dx + dy;
+  int x = x0, y = y0;
+  
+  while (true)
+  {
+    if (inBounds(x, y)) data[y * width + x] = value;
+    if (x == x1 && y == y1) break;
+    int e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x += sx; }
+    if (e2 <= dx) { err += dx; y += sy; }
+  }
+}
+
+void OsmVisualizer::morphClose(std::vector<int8_t> &data, int width, int height, int radius, int iters) const
+{
+  if (radius <= 0 || iters <= 0) return;
+
+  auto dilate = [&](std::vector<int8_t> &src) {
+    std::vector<int8_t> dst = src;
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        if (src[y * width + x] == 0) {
+          for (int j = -radius; j <= radius; ++j) {
+            for (int i = -radius; i <= radius; ++i) {
+              int nx = x + i, ny = y + j;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                dst[ny * width + nx] = 0;
+            }
+          }
+        }
+      }
+    }
+    src.swap(dst);
+  };
+
+  auto erode = [&](std::vector<int8_t> &src) {
+    std::vector<int8_t> dst = src;
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        if (src[y * width + x] == 0) {
+          bool keep = true;
+          for (int j = -radius; j <= radius && keep; ++j) {
+            for (int i = -radius; i <= radius; ++i) {
+              int nx = x + i, ny = y + j;
+              if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+              if (src[ny * width + nx] != 0) keep = false;
+            }
+          }
+          if (!keep) dst[y * width + x] = static_cast<int8_t>(outside_value_);
+        }
+      }
+    }
+    src.swap(dst);
+  };
+
+  for (int k = 0; k < iters; ++k) { dilate(data); erode(data); }
+}
+
+void OsmVisualizer::fillLaneletPolygon(const std::vector<lanelet::ConstPoint3d> &points, int width, int height,
+                                       double min_x, double min_y, std::vector<int8_t> &grid, int8_t value) const
+{
+  if (points.size() < 3) return;
+
+  // Convert polygon points to grid coordinates
+  std::vector<std::pair<int, int>> grid_points;
+  for (const auto &point : points)
+  {
+    int gx, gy;
+    worldToGrid(point.x(), point.y(), min_x, min_y, gx, gy);
+    grid_points.push_back({gx, gy});
+  }
+
+  // Use scanline algorithm to fill polygon
+  int min_y_grid = height, max_y_grid = 0;
+  for (const auto &p : grid_points)
+  {
+    min_y_grid = std::min(min_y_grid, p.second);
+    max_y_grid = std::max(max_y_grid, p.second);
+  }
+
+  for (int y = min_y_grid; y <= max_y_grid; ++y)
+  {
+    std::vector<int> intersections;
+    
+    // Find intersections with horizontal line
+    for (size_t i = 0; i < grid_points.size() - 1; ++i)
+    {
+      int y1 = grid_points[i].second;
+      int y2 = grid_points[i + 1].second;
+      
+      if ((y1 <= y && y < y2) || (y2 <= y && y < y1))
+      {
+        int x1 = grid_points[i].first;
+        int x2 = grid_points[i + 1].first;
+        int x = x1 + (y - y1) * (x2 - x1) / (y2 - y1);
+        intersections.push_back(x);
+      }
+    }
+    
+    // Sort intersections and fill between pairs
+    std::sort(intersections.begin(), intersections.end());
+    for (size_t i = 0; i < intersections.size(); i += 2)
+    {
+      if (i + 1 < intersections.size())
+      {
+        for (int x = intersections[i]; x <= intersections[i + 1]; ++x)
+        {
+          if (x >= 0 && x < width && y >= 0 && y < height)
+          {
+            grid[y * width + x] = value;
+          }
+        }
+      }
+    }
+  }
 }

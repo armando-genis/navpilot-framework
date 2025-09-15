@@ -48,7 +48,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_base_to_base_footprint',
-        arguments=['-1.93', '0.5', '-0.6', '0', '0', '0', 'base_link', 'light_1'],
+        arguments=['-1.93', '0.5', '-0.7', '0', '0', '0', 'base_link', 'light_1'],
     )
 
 
@@ -56,10 +56,9 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_base_to_base_footprint',
-        arguments=['-1.93', '-0.5', '-0.6', '0', '0', '0', 'base_link', 'light_2'],
+        arguments=['-1.93', '-0.5', '-0.7', '0', '0', '0', 'base_link', 'light_2'],
     )
-
-
+    
     return launch.LaunchDescription([
         SetEnvironmentVariable(name='RCUTILS_CONSOLE_OUTPUT_FORMAT', value='{message}'),
         static_transform_velodyne_to_base,

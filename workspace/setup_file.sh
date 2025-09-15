@@ -56,3 +56,4 @@ colcon build --packages-select lio_sam
 colcon build --packages-select ndt_omp_ros2
 colcon build --packages-select lidar_localization_ros2
 colcon build --packages-select sensors_launch
+colcon build --packages-select waypoints_routing
