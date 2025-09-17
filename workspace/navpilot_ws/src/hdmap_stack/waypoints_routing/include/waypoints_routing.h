@@ -47,14 +47,19 @@ private:
     std::string map_path_;
     visualization_msgs::msg::MarkerArray graph_waypoint_markers;
     visualization_msgs::msg::MarkerArray full_graph_markers;
+    visualization_msgs::msg::MarkerArray neighbor_waypoint_markers;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr waypoints_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr full_graph_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr neighbor_waypoints_publisher_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
     void lanelet_routing_test(lanelet::LaneletMapPtr &map);
     void generateFullGraphVisualization(lanelet::LaneletMapPtr &map);
+    void generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
+    bool isSameDirection(const lanelet::ConstLanelet &lanelet1, const lanelet::ConstLanelet &lanelet2);
+    bool isBeyondTarget(const lanelet::ConstLanelet &lanelet, const routing::LaneletPath &shortestPath);
     bool readParameters();
     void publishWaypoints();
 
