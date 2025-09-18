@@ -60,8 +60,18 @@ private:
     void generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
     bool isSameDirection(const lanelet::ConstLanelet &lanelet1, const lanelet::ConstLanelet &lanelet2);
     bool isBeyondTarget(const lanelet::ConstLanelet &lanelet, const routing::LaneletPath &shortestPath);
+    bool isBranchingLanelet(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet);
     bool readParameters();
     void publishWaypoints();
+
+    bool isCompatibleTrajectory(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
+    int countMeaningfulConnections(const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, int current_path_index);
+
+    std::pair<double, double> getEndDirection(const std::vector<lanelet::ConstPoint3d> &points);
+    std::pair<double, double> getStartDirection(const std::vector<lanelet::ConstPoint3d> &points);
+    double calculatePathCurvature(const std::vector<lanelet::ConstPoint3d> &points);
+    double calculatePathLength(const routing::LaneletPath &path);
+    double calculateRemainingPathLength(const routing::LaneletPath &path, int start_index);
 
     double x_offset_;
     double y_offset_;
