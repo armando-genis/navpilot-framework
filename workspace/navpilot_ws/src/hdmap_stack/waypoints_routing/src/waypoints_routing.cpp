@@ -376,6 +376,7 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
     
     // Clear previous neighbor waypoints
     neighbor_waypoint_markers.markers.clear();
+    neighbor_points_.clear();
     
     // First, add waypoints from the main routing path
     for (const auto &path_lanelet : shortestPath)
@@ -428,6 +429,8 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
         {
             waypoints.push_back(points.back());
         }
+
+        std::vector<point_struct> main_path_points;
         
         // Create markers for each waypoint in the main path
         for (size_t i = 0; i < waypoints.size(); ++i)
@@ -487,8 +490,20 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
              
             // Add to marker array
             neighbor_waypoint_markers.markers.push_back(waypoint_marker);
+
+            // Store the point with priority 1 (blue path)
+            point_struct waypoint_data;
+            waypoint_data.x = point.x();
+            waypoint_data.y = point.y();
+            waypoint_data.heading = yaw;
+            waypoint_data.priority = 1; // Blue path priority
+            main_path_points.push_back(waypoint_data);
+
         }
+
+        neighbor_points_.push_back(main_path_points);
     }
+
     
     // Then, add waypoints from neighboring and reachable lanelets
     for (const auto &path_lanelet : shortestPath)
@@ -547,6 +562,8 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
             {
                 waypoints.push_back(points.back());
             }
+
+            std::vector<point_struct> neighbor_lanelet_points;
             
             // Create markers for each waypoint
             for (size_t i = 0; i < waypoints.size(); ++i)
@@ -606,9 +623,20 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
                  
                 // Add to marker array
                 neighbor_waypoint_markers.markers.push_back(waypoint_marker);
+
+                // Store the point with priority 2 (orange path)
+                point_struct waypoint_data;
+                waypoint_data.x = point.x();
+                waypoint_data.y = point.y();
+                waypoint_data.heading = yaw;
+                waypoint_data.priority = 2; // Orange path priority
+                neighbor_lanelet_points.push_back(waypoint_data);
             }
+
+            neighbor_points_.push_back(neighbor_lanelet_points);
         }
     }
+
     
     // Also include lanelets that branch off through curves/turns (following relationships)
     std::cout << blue << "Finding lanelets that branch off through curves..." << reset << std::endl;
@@ -618,7 +646,7 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
         // Get lanelets that follow this path lanelet (branches, curves, etc.)
         auto following_lanelets = routingGraph->following(path_lanelet, true); // withLaneChanges = true
         
-        std::cout << yellow << "Path lanelet " << path_lanelet.id() << " has " << following_lanelets.size() << " following lanelets" << reset << std::endl;
+        // std::cout << yellow << "Path lanelet " << path_lanelet.id() << " has " << following_lanelets.size() << " following lanelets" << reset << std::endl;
         
         for (const auto &following_lanelet : following_lanelets)
         {
@@ -639,26 +667,26 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
             if (isInMainPath)
                 continue;
             
-            std::cout << blue << "  Evaluating following lanelet " << following_lanelet.id() << " for trajectory compatibility..." << reset << std::endl;
+            // std::cout << blue << "  Evaluating following lanelet " << following_lanelet.id() << " for trajectory compatibility..." << reset << std::endl;
             
             //  More strict direction and trajectory checking
             if (!isCompatibleTrajectory(path_lanelet, following_lanelet, routingGraph, shortestPath, map))
             {
-                std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out due to incompatible trajectory" << reset << std::endl;
+                // std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out due to incompatible trajectory" << reset << std::endl;
                 continue;
             }
             
             // Check if this is actually a branching lanelet (not just a parallel neighbor)
             if (!isBranchingLanelet(path_lanelet, following_lanelet))
             {
-                std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out - not a branching lanelet" << reset << std::endl;
+                // std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out - not a branching lanelet" << reset << std::endl;
                 continue;
             }
             
             // Check if this lanelet is not beyond the target
             if (isBeyondTarget(following_lanelet, shortestPath))
             {
-                std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out due to being beyond target" << reset << std::endl;
+                // std::cout << yellow << "  Following lanelet " << following_lanelet.id() << " filtered out due to being beyond target" << reset << std::endl;
                 continue;
             }
             
@@ -708,6 +736,8 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
             {
                 waypoints.push_back(points.back());
             }
+
+            std::vector<point_struct> branching_lanelet_points;
             
             // Create markers for each waypoint
             for (size_t i = 0; i < waypoints.size(); ++i)
@@ -767,9 +797,20 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
                  
                 // Add to marker array
                 neighbor_waypoint_markers.markers.push_back(waypoint_marker);
+
+                // Store the point with priority 3 (purple path)
+                point_struct waypoint_data;
+                waypoint_data.x = point.x();
+                waypoint_data.y = point.y();
+                waypoint_data.heading = yaw;
+                waypoint_data.priority = 3; // Purple path priority
+                branching_lanelet_points.push_back(waypoint_data);
             }
+
+            neighbor_points_.push_back(branching_lanelet_points);
         }
     }
+
     
     // Try alternative approach: find lanelets that are connected through adjacency
     std::cout << blue << "Finding lanelets connected through adjacency..." << reset << std::endl;
@@ -788,7 +829,7 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
         if (adjacent_left) adjacent_lanelets.push_back(*adjacent_left);
         if (adjacent_right) adjacent_lanelets.push_back(*adjacent_right);
         
-        std::cout << yellow << "Path lanelet " << path_lanelet.id() << " has " << adjacent_lanelets.size() << " adjacent lanelets" << reset << std::endl;
+        // std::cout << yellow << "Path lanelet " << path_lanelet.id() << " has " << adjacent_lanelets.size() << " adjacent lanelets" << reset << std::endl;
         
         for (const auto &adjacent_lanelet : adjacent_lanelets)
         {
@@ -809,19 +850,19 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
             if (isInMainPath)
                 continue;
             
-            std::cout << blue << "  Evaluating adjacent lanelet " << adjacent_lanelet.id() << " for trajectory compatibility..." << reset << std::endl;
+            // std::cout << blue << "  Evaluating adjacent lanelet " << adjacent_lanelet.id() << " for trajectory compatibility..." << reset << std::endl;
             
             // IMPROVED: Use the same strict trajectory checking for adjacent lanelets
             if (!isCompatibleTrajectory(path_lanelet, adjacent_lanelet, routingGraph, shortestPath, map))
             {
-                std::cout << yellow << "  Adjacent lanelet " << adjacent_lanelet.id() << " filtered out due to incompatible trajectory" << reset << std::endl;
+                // std::cout << yellow << "  Adjacent lanelet " << adjacent_lanelet.id() << " filtered out due to incompatible trajectory" << reset << std::endl;
                 continue;
             }
             
             // Check if this lanelet is not beyond the target
             if (isBeyondTarget(adjacent_lanelet, shortestPath))
             {
-                std::cout << yellow << "  Adjacent lanelet " << adjacent_lanelet.id() << " filtered out due to being beyond target" << reset << std::endl;
+                // std::cout << yellow << "  Adjacent lanelet " << adjacent_lanelet.id() << " filtered out due to being beyond target" << reset << std::endl;
                 continue;
             }
             
@@ -871,6 +912,8 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
             {
                 waypoints.push_back(points.back());
             }
+
+            std::vector<point_struct> adjacent_lanelet_points;
             
             // Create markers for each waypoint
             for (size_t i = 0; i < waypoints.size(); ++i)
@@ -930,15 +973,30 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
                  
                 // Add to marker array
                 neighbor_waypoint_markers.markers.push_back(waypoint_marker);
+
+                // Store the point with priority 4 (purple path)
+                point_struct waypoint_data;
+                waypoint_data.x = point.x();
+                waypoint_data.y = point.y();
+                waypoint_data.heading = yaw;
+                waypoint_data.priority = 4; // Purple path priority
+                adjacent_lanelet_points.push_back(waypoint_data);
             }
+
+            neighbor_points_.push_back(adjacent_lanelet_points);
         }
     }
-    
+
     // Publish the neighbor waypoints
     neighbor_waypoints_publisher_->publish(neighbor_waypoint_markers);
     
-    std::cout << green << "Neighbor waypoints generated with " << neighbor_waypoint_markers.markers.size() 
-              << " waypoints from " << processed_lanelets.size() << " lanelets (including main path, direct neighbors, branching curves, and reachable lanelets)" << reset << std::endl;
+    // std::cout << green << "Neighbor waypoints generated with " << neighbor_waypoint_markers.markers.size() 
+    //           << " waypoints from " << processed_lanelets.size() << " lanelets (including main path, direct neighbors, branching curves, and reachable lanelets)" << reset << std::endl;
+
+
+    auto all_neighbor_points = getAllWaypointsStruct();
+    std::cout << green << "Neighbor points generated with " << neighbor_points_.size() << " points" << reset << std::endl;
+    std::cout << green << "All neighbor points generated with " << all_neighbor_points.size() << " points" << reset << std::endl;
 }
 
 // NEW FUNCTION: Curve-aware trajectory compatibility checking
@@ -958,9 +1016,7 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
     
     bool is_direct_continuation = connection_distance < 10.0; // Within 10m = likely continuation
     
-    std::cout << yellow << "    Connection analysis: distance=" << connection_distance 
-              << " is_continuation=" << (is_direct_continuation ? "YES" : "NO") << reset << std::endl;
-    
+
     // 2. Check overall direction compatibility
     double path_dx = path_points.back().x() - path_points.front().x();
     double path_dy = path_points.back().y() - path_points.front().y();
@@ -985,21 +1041,16 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
     // Adaptive thresholds based on context
     double max_allowed_angle = is_direct_continuation ? 70.0 : 45.0; // Even more lenient for continuations
     
-    std::cout << yellow << "    Overall direction: angle=" << overall_angle 
-              << "° max_allowed=" << max_allowed_angle << "°" << reset << std::endl;
-    
+
     if (overall_angle > max_allowed_angle)
     {
-        std::cout << yellow << "    Trajectory rejected: poor overall direction alignment" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: poor overall direction alignment" << reset << std::endl;
         return false;
     }
     
     // 3. Cross product analysis for turn detection
     double cross_product = path_dx * candidate_dy - path_dy * candidate_dx;
     double cross_magnitude = std::abs(cross_product);
-    
-    std::cout << yellow << "    Cross product: magnitude=" << cross_magnitude 
-              << " direction=" << (cross_product > 0 ? "left" : "right") << reset << std::endl;
     
     // 4. Check if this is a consistent diverging curve by analyzing the path end direction
     // Get the direction at the end of the path lanelet
@@ -1013,12 +1064,12 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
                            path_end_direction.second * candidate_start_direction.second;
     double transition_angle = std::acos(std::max(-1.0, std::min(1.0, transition_dot))) * 180.0 / M_PI;
     
-    std::cout << yellow << "    Transition angle: " << transition_angle << "°" << reset << std::endl;
+    // std::cout << yellow << "    Transition angle: " << transition_angle << "°" << reset << std::endl;
     
     // Check for sharp direction changes at the connection point
     if (transition_angle > 90.0) // Very sharp transition
     {
-        std::cout << yellow << "    Trajectory rejected: sharp transition at connection" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: sharp transition at connection" << reset << std::endl;
         return false;
     }
     
@@ -1087,21 +1138,16 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
     // Allow curves to have higher average deviation
     double max_avg_deviation = is_direct_continuation ? 50.0 : 35.0; // Increased limits
     
-    std::cout << yellow << "    Segment analysis: avg_dev=" << avg_deviation_deg 
-              << "° cross_sign_changes=" << cross_sign_changes << reset << std::endl;
-    
     if (avg_deviation_deg > max_avg_deviation)
     {
-        std::cout << yellow << "    Trajectory rejected: excessive average deviation" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: excessive average deviation" << reset << std::endl;
         return false;
     }
     
     // 6. Check if candidate connects to valid lanelets
     double avg_cross = cumulative_cross / valid_samples;
     
-    std::cout << yellow << "    Turn analysis: avg_cross=" << avg_cross << reset << std::endl;
-    
-    // Check if candidate leads to useful destinations, not just connections
+    // std::cout << yellow << "    Turn analysis: avg_cross=" << avg_cross << reset << std::endl;
     
     // Get the lanelets that follow the candidate
     auto candidate_following = routingGraph->following(candidate_lanelet, true);
@@ -1121,14 +1167,14 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
     // Use helper function to count meaningful connections
     int meaningful_connections = countMeaningfulConnections(candidate_lanelet, routingGraph, shortestPath, current_path_index, map);
     
-    std::cout << yellow << "    Connectivity analysis: meaningful_connections=" << meaningful_connections << reset << std::endl;
+    // std::cout << yellow << "    Connectivity analysis: meaningful_connections=" << meaningful_connections << reset << std::endl;
     
     // Require at least 2 meaningful connections AND both start/end connections for valid curves/paths
     // This ensures lanelets connect to multiple blue/orange paths and aren't dead-ends
     if (meaningful_connections < 2)
     {
-        std::cout << yellow << "    Trajectory rejected: insufficient meaningful connections (" << meaningful_connections 
-                  << " < 2). Valid curves/paths must connect to at least 2 different lanelets or destinations." << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: insufficient meaningful connections (" << meaningful_connections 
+        //           << " < 2). Valid curves/paths must connect to at least 2 different lanelets or destinations." << reset << std::endl;
         return false;
     }
     
@@ -1136,14 +1182,14 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
     if (std::abs(avg_cross) > 0.8 && meaningful_connections < 2)
     {
         // Very strong turning + very limited connections = suspicious
-        std::cout << yellow << "    Trajectory rejected: very strong divergent turning with very limited connections" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: very strong divergent turning with very limited connections" << reset << std::endl;
         return false;
     }
     
     // Keep a safety threshold for extremely sharp turns
     if (std::abs(avg_cross) > 1.2)
     {
-        std::cout << yellow << "    Trajectory rejected: extremely sharp turning" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: extremely sharp turning" << reset << std::endl;
         return false;
     }
     
@@ -1158,20 +1204,20 @@ bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path
         std::pow(candidate_points.back().y() - path_points.back().y(), 2)
     );
     
-    std::cout << yellow << "    Distance check: start=" << start_distance << " end=" << end_distance << reset << std::endl;
-    
+
     // Much more lenient for direct continuations, especially curves
     double max_divergence_factor = is_direct_continuation ? 1.0 : 0.4; // Very lenient for continuations
     double max_lanelet_length = std::max(path_length, candidate_length);
     
     if (end_distance > start_distance + max_lanelet_length * max_divergence_factor)
     {
-        std::cout << yellow << "    Trajectory rejected: excessive divergence" << reset << std::endl;
+        // std::cout << yellow << "    Trajectory rejected: excessive divergence" << reset << std::endl;
         return false;
     }
     
     std::cout << green << "    Trajectory accepted: compatible path (continuation=" 
               << (is_direct_continuation ? "YES" : "NO") << ")" << reset << std::endl;
+
     return true;
 }
 
@@ -1213,57 +1259,6 @@ std::pair<double, double> waypoints_routing::getStartDirection(const std::vector
         return {0, 0};
     
     return {dx/length, dy/length};
-}
-
-// Helper function to calculate path curvature
-double waypoints_routing::calculatePathCurvature(const std::vector<lanelet::ConstPoint3d> &points)
-{
-    if (points.size() < 3)
-        return 0.0;
-    
-    // Sample 3-5 points along the path to calculate average curvature
-    int num_samples = std::min(5, (int)points.size() - 2);
-    double cumulative_curvature = 0.0;
-    int valid_samples = 0;
-    
-    for (int i = 0; i < num_samples; ++i)
-    {
-        int idx = (i * (points.size() - 2)) / num_samples + 1; // Start from index 1
-        
-        if (idx - 1 < 0 || idx + 1 >= points.size())
-            continue;
-        
-        // Get three consecutive points
-        auto p1 = points[idx - 1];
-        auto p2 = points[idx];
-        auto p3 = points[idx + 1];
-        
-        // Calculate vectors
-        double v1x = p2.x() - p1.x();
-        double v1y = p2.y() - p1.y();
-        double v2x = p3.x() - p2.x();
-        double v2y = p3.y() - p2.y();
-        
-        double len1 = std::sqrt(v1x*v1x + v1y*v1y);
-        double len2 = std::sqrt(v2x*v2x + v2y*v2y);
-        
-        if (len1 < 1e-6 || len2 < 1e-6)
-            continue;
-        
-        // Normalize vectors
-        v1x /= len1;
-        v1y /= len1;
-        v2x /= len2;
-        v2y /= len2;
-        
-        // Calculate curvature using cross product (positive = left turn, negative = right turn)
-        double curvature = v1x * v2y - v1y * v2x;
-        
-        cumulative_curvature += curvature;
-        valid_samples++;
-    }
-    
-    return valid_samples > 0 ? cumulative_curvature / valid_samples : 0.0;
 }
 
 // Helper function to calculate total path length
@@ -1309,53 +1304,6 @@ double waypoints_routing::calculateRemainingPathLength(const routing::LaneletPat
     return remaining_length;
 }
 
-bool waypoints_routing::isSameDirection(const lanelet::ConstLanelet &lanelet1, const lanelet::ConstLanelet &lanelet2)
-{
-    // Get the centerlines of both lanelets
-    auto points1 = lanelet1.centerline3d();
-    auto points2 = lanelet2.centerline3d();
-    
-    if (points1.size() < 2 || points2.size() < 2)
-        return false;
-    
-    // Calculate the direction vector for lanelet1 (from start to end)
-    double dx1 = points1.back().x() - points1.front().x();
-    double dy1 = points1.back().y() - points1.front().y();
-    double length1 = std::sqrt(dx1*dx1 + dy1*dy1);
-    
-    if (length1 < 1e-6) // Avoid division by zero
-        return false;
-    
-    // Normalize the direction vector for lanelet1
-    dx1 /= length1;
-    dy1 /= length1;
-    
-    // Calculate the direction vector for lanelet2 (from start to end)
-    double dx2 = points2.back().x() - points2.front().x();
-    double dy2 = points2.back().y() - points2.front().y();
-    double length2 = std::sqrt(dx2*dx2 + dy2*dy2);
-    
-    if (length2 < 1e-6) // Avoid division by zero
-        return false;
-    
-    // Normalize the direction vector for lanelet2
-    dx2 /= length2;
-    dy2 /= length2;
-    
-    // Calculate the dot product to determine if they're going in the same direction
-    double dot_product = dx1 * dx2 + dy1 * dy2;
-    
-    // Use a more relaxed threshold to include more lanelets
-    // Allow lanelets that are going in roughly the same direction
-    double threshold = 0.3; // cos(70°) ≈ 0.34, so this allows up to ~70° difference
-    
-    // Debug output
-    std::cout << yellow << "    Direction check: lanelet1=" << lanelet1.id() 
-              << " lanelet2=" << lanelet2.id() << " dot_product=" << dot_product 
-              << " threshold=" << threshold << " result=" << (dot_product > threshold) << reset << std::endl;
-    
-    return dot_product > threshold;
-}
 
 bool waypoints_routing::isBeyondTarget(const lanelet::ConstLanelet &lanelet, const routing::LaneletPath &shortestPath)
 {
@@ -1648,12 +1596,12 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
             if (is_part_of_main_path)
             {
                 meaningful_connections += 2; // Give higher weight to main path connections
-                std::cout << yellow << "      Adjacent lanelet " << adjacent_ll.id() << " is part of main path - counted as 2 connections" << reset << std::endl;
+                // std::cout << yellow << "      Adjacent lanelet " << adjacent_ll.id() << " is part of main path - counted as 2 connections" << reset << std::endl;
             }
             else
             {
                 meaningful_connections += 1; // Regular adjacent connection
-                std::cout << yellow << "      Adjacent lanelet " << adjacent_ll.id() << " counted as 1 connection" << reset << std::endl;
+                // std::cout << yellow << "      Adjacent lanelet " << adjacent_ll.id() << " counted as 1 connection" << reset << std::endl;
             }
             
             counted_lanelets.insert(adjacent_ll.id());
@@ -1702,16 +1650,16 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
             start_connections++;
             meaningful_connections++;
             counted_lanelets.insert(main_ll.id());
-            std::cout << yellow << "      Main path lanelet " << main_ll.id() << " connected at START (dist=" 
-                      << std::min(start_to_main_start, start_to_main_end) << "m)" << reset << std::endl;
+            // std::cout << yellow << "      Main path lanelet " << main_ll.id() << " connected at START (dist=" 
+            //           << std::min(start_to_main_start, start_to_main_end) << "m)" << reset << std::endl;
         }
         
         // DEBUG: Show all distances for main path lanelets
-        std::cout << yellow << "      Main path lanelet " << main_ll.id() << " END distances: to_start=" << end_to_main_start 
-                  << "m, to_end=" << end_to_main_end << "m" << reset << std::endl;
+        // std::cout << yellow << "      Main path lanelet " << main_ll.id() << " END distances: to_start=" << end_to_main_start 
+        //           << "m, to_end=" << end_to_main_end << "m" << reset << std::endl;
         
-        // If candidate connects to main path at end (within 15m - increased threshold for debugging)
-        if (end_to_main_start < 15.0 || end_to_main_end < 15.0)
+        // If candidate connects to main path at end (within 5m)
+        if (end_to_main_start < 5.0 || end_to_main_end < 5.0)
         {
             end_connections++;
             if (counted_lanelets.find(main_ll.id()) == counted_lanelets.end())
@@ -1719,8 +1667,8 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
                 meaningful_connections++;
                 counted_lanelets.insert(main_ll.id());
             }
-            std::cout << yellow << "      Main path lanelet " << main_ll.id() << " connected at END (dist=" 
-                      << std::min(end_to_main_start, end_to_main_end) << "m)" << reset << std::endl;
+            // std::cout << yellow << "      Main path lanelet " << main_ll.id() << " connected at END (dist=" 
+            //           << std::min(end_to_main_start, end_to_main_end) << "m)" << reset << std::endl;
         }
     }
     
@@ -1764,7 +1712,7 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
         // Skip self-connections - a lanelet should not count as connecting to itself
         if (reachable_id == candidate_lanelet.id())
         {
-            std::cout << yellow << "      Skipping self-connection for lanelet " << reachable_id << reset << std::endl;
+            // std::cout << yellow << "      Skipping self-connection for lanelet " << reachable_id << reset << std::endl;
             continue;
         }
             
@@ -1803,16 +1751,13 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
             start_connections++;
             meaningful_connections++;
             counted_lanelets.insert(reachable_id);
-            std::cout << yellow << "      Reachable lanelet " << reachable_id << " connected at START (dist=" 
-                      << std::min(start_to_reachable_start, start_to_reachable_end) << "m)" << reset << std::endl;
+            // std::cout << yellow << "      Reachable lanelet " << reachable_id << " connected at START (dist=" 
+            //           << std::min(start_to_reachable_start, start_to_reachable_end) << "m)" << reset << std::endl;
         }
         
-        // Show all distances for reachable lanelets
-        std::cout << yellow << "      Reachable lanelet " << reachable_id << " END distances: to_start=" << end_to_reachable_start 
-                  << "m, to_end=" << end_to_reachable_end << "m" << reset << std::endl;
         
-        // If candidate connects to reachable lanelet at end (within 15m)
-        if (end_to_reachable_start < 15.0 || end_to_reachable_end < 15.0)
+        // If candidate connects to reachable lanelet at end (within 5m)
+        if (end_to_reachable_start < 5.0 || end_to_reachable_end < 5.0)
         {
             end_connections++;
             if (counted_lanelets.find(reachable_id) == counted_lanelets.end())
@@ -1820,8 +1765,8 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
                 meaningful_connections++;
                 counted_lanelets.insert(reachable_id);
             }
-            std::cout << yellow << "      Reachable lanelet " << reachable_id << " connected at END (dist=" 
-                      << std::min(end_to_reachable_start, end_to_reachable_end) << "m)" << reset << std::endl;
+            // std::cout << yellow << "      Reachable lanelet " << reachable_id << " connected at END (dist=" 
+            //           << std::min(end_to_reachable_start, end_to_reachable_end) << "m)" << reset << std::endl;
         }
     }
     
@@ -1881,16 +1826,16 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
                 start_connections++;
                 meaningful_connections++;
                 counted_lanelets.insert(neighbor_ll.id());
-                std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " connected at START (dist=" 
-                          << std::min(start_to_neighbor_start, start_to_neighbor_end) << "m)" << reset << std::endl;
+                // std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " connected at START (dist=" 
+                //           << std::min(start_to_neighbor_start, start_to_neighbor_end) << "m)" << reset << std::endl;
             }
             
             // Show all distances for neighbor lanelets
-            std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " END distances: to_start=" << end_to_neighbor_start 
-                      << "m, to_end=" << end_to_neighbor_end << "m" << reset << std::endl;
+            // std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " END distances: to_start=" << end_to_neighbor_start 
+            //           << "m, to_end=" << end_to_neighbor_end << "m" << reset << std::endl;
             
-            // If candidate connects to neighbor at end (within 15m - increased threshold for debugging)
-            if (end_to_neighbor_start < 15.0 || end_to_neighbor_end < 15.0)
+            // If candidate connects to neighbor at end (within 5m)
+            if (end_to_neighbor_start < 5.0 || end_to_neighbor_end < 5.0)
             {
                 end_connections++;
                 if (counted_lanelets.find(neighbor_ll.id()) == counted_lanelets.end())
@@ -1898,38 +1843,30 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
                     meaningful_connections++;
                     counted_lanelets.insert(neighbor_ll.id());
                 }
-                std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " connected at END (dist=" 
-                          << std::min(end_to_neighbor_start, end_to_neighbor_end) << "m)" << reset << std::endl;
+                // std::cout << yellow << "      Neighbor lanelet " << neighbor_ll.id() << " connected at END (dist=" 
+                //           << std::min(end_to_neighbor_start, end_to_neighbor_end) << "m)" << reset << std::endl;
             }
         }
     }
-    
-    std::cout << yellow << "    Final connection count: " << meaningful_connections 
-              << " (start=" << start_connections << ", end=" << end_connections << ")" << reset << std::endl;
-    
-    // Show candidate lanelet endpoints
-    std::cout << yellow << "    Candidate lanelet " << candidate_lanelet.id() << " endpoints: start=(" 
-              << candidate_start.x() << "," << candidate_start.y() << ") end=(" 
-              << candidate_end.x() << "," << candidate_end.y() << ")" << reset << std::endl;
-    
+        
     // Require both start AND end connections for valid curves
     // Valid curves must connect to blue/orange paths at both beginning and end
     if (meaningful_connections < 1)
     {
-        std::cout << yellow << "    Lanelet rejected: no meaningful connections found" << reset << std::endl;
+        // std::cout << yellow << "    Lanelet rejected: no meaningful connections found" << reset << std::endl;
         return 0;
     }
     
     // Require both start AND end connections for valid curves
     if (start_connections == 0)
     {
-        std::cout << yellow << "    Lanelet rejected: no connections at START - curves must connect to blue/orange paths at beginning" << reset << std::endl;
+        // std::cout << yellow << "    Lanelet rejected: no connections at START - curves must connect to blue/orange paths at beginning" << reset << std::endl;
         return 0;
     }
     
     if (end_connections == 0)
     {
-        std::cout << yellow << "    Lanelet rejected: no connections at END - curves must connect to blue/orange paths at end" << reset << std::endl;
+        // std::cout << yellow << "    Lanelet rejected: no connections at END - curves must connect to blue/orange paths at end" << reset << std::endl;
         return 0;
     }
     
@@ -2002,21 +1939,37 @@ int waypoints_routing::countMeaningfulConnections(const lanelet::ConstLanelet &c
         }
     }
     
-    std::cout << yellow << "    End connection analysis: total_end_connections=" << end_connections 
-              << ", meaningful_end_connections=" << meaningful_end_connections << reset << std::endl;
+    // std::cout << yellow << "    End connection analysis: total_end_connections=" << end_connections 
+    //           << ", meaningful_end_connections=" << meaningful_end_connections << reset << std::endl;
     
     // Require at least one meaningful end connection (to main path or neighbor lanelets)
     if (meaningful_end_connections == 0)
     {
-        std::cout << yellow << "    Lanelet rejected: no meaningful end connections - curves must connect to main path or neighbor lanelets at end" << reset << std::endl;
+        // std::cout << yellow << "    Lanelet rejected: no meaningful end connections - curves must connect to main path or neighbor lanelets at end" << reset << std::endl;
         return 0;
     }
     
     // Accept only if we have connections at both start AND meaningful end connections
-    std::cout << yellow << "    Lanelet accepted: has meaningful connections at both start and end (start=" << start_connections 
-              << ", meaningful_end=" << meaningful_end_connections << ", total=" << meaningful_connections << ")" << reset << std::endl;
+    // std::cout << yellow << "    Lanelet accepted: has meaningful connections at both start and end (start=" << start_connections 
+    //           << ", meaningful_end=" << meaningful_end_connections << ", total=" << meaningful_connections << ")" << reset << std::endl;
     
     return meaningful_connections;
+}
+
+// Add this function implementation
+std::vector<point_struct> waypoints_routing::getAllWaypointsStruct() const
+{
+    std::vector<point_struct> filtered_points;
+    
+    for (const auto &lanelet_points : neighbor_points_)
+    {
+        for (const auto &point : lanelet_points)
+        {
+            filtered_points.push_back(point);
+        }
+    }
+    
+    return filtered_points;
 }
 
 void waypoints_routing::publishWaypoints()

@@ -1,5 +1,5 @@
-#ifndef WAYPOINTS_ROUTING_H
-#define WAYPOINTS_ROUTING_H
+#ifndef GLOBAL_PLANNER_HPP
+#define GLOBAL_PLANNER_HPP
 
 #include <rclcpp/rclcpp.hpp>
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -12,7 +12,6 @@
 #include <lanelet2_routing/RoutingGraph.h>
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 #include <lanelet2_projection/LocalCartesian.h>
-#include <lanelet2_core/geometry/Point.h>
 #include <lanelet2_core/primitives/Lanelet.h>
 #include <lanelet2_traffic_rules/TrafficRules.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -28,10 +27,9 @@ using namespace std;
 struct point_struct { double x, y, heading; 
                     int priority;};
 
-class waypoints_routing : public rclcpp::Node
+class GlobalPlanner
 {
 private:
-    /* data */
 
     // colors for the terminal
     std::string green = "\033[1;32m";
@@ -41,51 +39,34 @@ private:
     std::string purple = "\033[1;35m";
     std::string reset = "\033[0m";
 
-    int start_lanelet_id = 0;
-    int end_lanelet_id = 0;
-    bool show_full_graph = true;
-    double waypoint_interval = 3.0;  // Distance between waypoints in meters
+    //global planner parameters
+    double waypoint_interval = 3.0;
+    int start_lanelet_id_ = 0;
+    int end_lanelet_id_ = 0;
+    double x_offset_ = 0.0;
+    double y_offset_ = 0.0;
+    std::string map_path_ = "";
 
-    // Parameters
-    std::string map_path_;
-    visualization_msgs::msg::MarkerArray graph_waypoint_markers;
-    visualization_msgs::msg::MarkerArray full_graph_markers;
-    visualization_msgs::msg::MarkerArray neighbor_waypoint_markers;
-
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr waypoints_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr full_graph_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr neighbor_waypoints_publisher_;
-
-    rclcpp::TimerBase::SharedPtr timer_;
-
-    void lanelet_routing_test(lanelet::LaneletMapPtr &map);
-    void generateFullGraphVisualization(lanelet::LaneletMapPtr &map);
-    void generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
-    bool isBeyondTarget(const lanelet::ConstLanelet &lanelet, const routing::LaneletPath &shortestPath);
-    bool isBranchingLanelet(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet);
-    bool readParameters();
-    void publishWaypoints();
-
-    bool isCompatibleTrajectory(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, lanelet::LaneletMapPtr &map);
-    int countMeaningfulConnections(const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, int current_path_index, lanelet::LaneletMapPtr &map);
-
+    void map_routing(lanelet::LaneletMapPtr &map);
 
     std::vector<std::vector<point_struct>> neighbor_points_;  // point if the neighbor lanelet
 
-    
+    // get paths and neighbors
+    void generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
+    bool isBeyondTarget(const lanelet::ConstLanelet &lanelet, const routing::LaneletPath &shortestPath);
+    bool isBranchingLanelet(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet);
+    bool isCompatibleTrajectory(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, lanelet::LaneletMapPtr &map);
+    int countMeaningfulConnections(const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, int current_path_index, lanelet::LaneletMapPtr &map);
     std::pair<double, double> getEndDirection(const std::vector<lanelet::ConstPoint3d> &points);
     std::pair<double, double> getStartDirection(const std::vector<lanelet::ConstPoint3d> &points);
     double calculatePathLength(const routing::LaneletPath &path);
     double calculateRemainingPathLength(const routing::LaneletPath &path, int start_index);
-
     std::vector<point_struct> getAllWaypointsStruct() const;
 
-    double x_offset_;
-    double y_offset_;
 
 public:
-    waypoints_routing(/* args */);
-    ~waypoints_routing();
+    GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id);
+    ~GlobalPlanner();
 };
 
-#endif // WAYPOINTS_ROUTING_H
+#endif // GLOBAL_PLANNER_HPP

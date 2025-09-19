@@ -45,6 +45,9 @@
 // Node
 #include "Node.h"
 
+// Global Planner
+#include "GlobalPlanner.hpp"
+
 // C++
 #include <iostream>
 #include <vector>
@@ -158,6 +161,16 @@ private:
     void getCurrentRobotState();
 
     // =============================
+    // global planner
+    // =============================
+    std::shared_ptr<GlobalPlanner> global_planner_;
+    std::string map_path_;
+    double x_offset_;
+    double y_offset_;
+    int start_lanelet_id_;
+    int end_lanelet_id_;
+
+    // =============================
     // map combination and convine with the map obstacles
     // =============================
 
@@ -262,5 +275,4 @@ public:
 };
 
 #endif
-
 

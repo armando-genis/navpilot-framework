@@ -11,6 +11,11 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->declare_parameter<double>("step_car", 0.0);
     this->declare_parameter<int>("tree_depth", 3);
     this->declare_parameter<int>("branching_factor", 5);
+    this->declare_parameter<std::string>("map_path", "");
+    this->declare_parameter<double>("x_offset", 0.0);
+    this->declare_parameter<double>("y_offset", 0.0);
+    this->declare_parameter<int>("start_lanelet_id", 0);
+    this->declare_parameter<int>("end_lanelet_id", 0);
 
     this->get_parameter("maxSteerAngle", maxSteerAngle);
     this->get_parameter("wheelBase", wheelBase);
@@ -21,6 +26,11 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->get_parameter("step_car", step_car);
     this->get_parameter("tree_depth", tree_depth);
     this->get_parameter("branching_factor", branching_factor);
+    this->get_parameter("map_path", map_path_);
+    this->get_parameter("x_offset", x_offset_);
+    this->get_parameter("y_offset", y_offset_);
+    this->get_parameter("start_lanelet_id", start_lanelet_id_);
+    this->get_parameter("end_lanelet_id", end_lanelet_id_);
 
     // subscription for ma comination btw the glonal ma and the obstacles information
     // occupancy_grid_complete_map_1 ->  map from occupancy_pub -> resolution 1.0
@@ -54,6 +64,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     full_graph_ = std::make_shared<visualization_msgs::msg::MarkerArray>();
     grid_map_ = nullptr;
     current_node = nullptr;
+    global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_);
 
     // Create the vehicle geometry
     car_data_ = CarData(maxSteerAngle, wheelBase, axleToFront, axleToBack, width);
@@ -69,11 +80,17 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     RCLCPP_INFO(this->get_logger(), "\033[1;34mstep_car: %f\033[0m", step_car);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mtree_depth: %d\033[0m", tree_depth);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mbranching_factor: %d\033[0m", branching_factor);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mmap_path: %s\033[0m", map_path_.c_str());
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mx_offset: %f\033[0m", x_offset_);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34my_offset: %f\033[0m", y_offset_);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mstart_lanelet_id: %d\033[0m", start_lanelet_id_);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mend_lanelet_id: %d\033[0m", end_lanelet_id_);
 
     // get the motion commans
     motionCommands();
     precomputeCommandSamples();
 }
+
 
 path_planning::~path_planning()
 {

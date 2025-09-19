@@ -23,12 +23,21 @@ find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 set(tinysplinecxx_DIR "/usr/local/lib64/cmake/tinysplinecxx/")
 
+find_package(lanelet2_core)
+find_package(lanelet2_io)
+find_package(lanelet2_maps)
+find_package(lanelet2_projection)
+find_package(lanelet2_routing)
+find_package(lanelet2_traffic_rules)
+find_package(lanelet2_validation)
+find_package(polygon_msgs REQUIRED)
 
 add_executable(path_planning_node
                 src/path_planning.cpp
                 src/sat_collision_checker.cc
                 src/CarData.cpp
                 src/Grid_map.cpp
+                src/GlobalPlanner.cpp
                )
 
 ament_target_dependencies(path_planning_node
@@ -45,6 +54,15 @@ ament_target_dependencies(path_planning_node
   tf2_ros
   traffic_information_msgs
   OpenCV
+
+  lanelet2_core
+  lanelet2_io
+  lanelet2_maps
+  lanelet2_projection
+  lanelet2_routing
+  lanelet2_traffic_rules
+  lanelet2_validation
+  polygon_msgs
 )
 
 target_include_directories(path_planning_node PUBLIC

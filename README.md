@@ -150,3 +150,5 @@ ros2 launch /workspace/navpilot_ws/src/path_planning/launch/localization.launch.
 /workspace/models/stop_callejero.ply
 
 ros2 launch /workspace/navpilot_ws/src/hdmap_stack/launch/map.launch.py
+
+
