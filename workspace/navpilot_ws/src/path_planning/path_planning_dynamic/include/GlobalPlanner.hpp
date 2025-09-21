@@ -50,6 +50,7 @@ private:
     void map_routing(lanelet::LaneletMapPtr &map);
 
     std::vector<std::vector<point_struct>> neighbor_points_;  // point if the neighbor lanelet
+    std::vector<point_struct> all_waypoints_;  // point if the neighbor lanelet
 
     // get paths and neighbors
     void generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath);
@@ -63,10 +64,10 @@ private:
     double calculateRemainingPathLength(const routing::LaneletPath &path, int start_index);
     std::vector<point_struct> getAllWaypointsStruct() const;
 
-
 public:
     GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id);
     ~GlobalPlanner();
+    std::vector<point_struct> getAllAllWaypointsStruct();
 };
 
 #endif // GLOBAL_PLANNER_HPP

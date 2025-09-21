@@ -151,4 +151,4 @@ ros2 launch /workspace/navpilot_ws/src/path_planning/launch/localization.launch.
 
 ros2 launch /workspace/navpilot_ws/src/hdmap_stack/launch/map.launch.py
 
-
+ros2 launch path_planning_dynamic planning.launch.py

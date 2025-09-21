@@ -53,15 +53,13 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     real_trajectories_pub_2 = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/real_trajectories_option_2", 10);
 
-    // subcrition for the graph of the lane elements
-    full_graph_publisher_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(
-        "/full_graph", 10, std::bind(&path_planning::full_graph_callback, this, std::placeholders::_1));
+    global_planner_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/global_planner", 10);
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     rescaled_chunk_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     car_state_ = std::make_shared<State>();
-    full_graph_ = std::make_shared<visualization_msgs::msg::MarkerArray>();
     grid_map_ = nullptr;
     current_node = nullptr;
     global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_);
@@ -89,6 +87,8 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     // get the motion commans
     motionCommands();
     precomputeCommandSamples();
+    all_waypoints_from_global_planner_ = global_planner_->getAllAllWaypointsStruct();
+    publishGlobalPlanner();
 }
 
 
@@ -123,6 +123,51 @@ void path_planning::getCurrentRobotState()
     {
         std::cout << red << "Transform error: " << ex.what() << reset << std::endl;
     }
+}
+
+// =============================
+// publish the global planner
+// =============================
+void path_planning::publishGlobalPlanner()
+{
+    std::cout << green << "Publishing global planner" << reset << std::endl;
+    std::cout << green << "Global planner size: " << all_waypoints_from_global_planner_.size() << reset << std::endl;
+    global_planner_markers_.markers.clear();
+    for (size_t i = 0; i < all_waypoints_from_global_planner_.size(); i++)
+    {
+            // Create waypoint marker for main path from the global planner
+            visualization_msgs::msg::Marker waypoint_marker;
+            waypoint_marker.header.frame_id = "map";
+            waypoint_marker.header.stamp = this->now();
+            waypoint_marker.ns = "global_planner";
+            waypoint_marker.id = i;
+            waypoint_marker.type = visualization_msgs::msg::Marker::ARROW;
+            waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+
+            waypoint_marker.color.a = 0.8;
+            waypoint_marker.color.r = 0.0;
+            waypoint_marker.color.g = 0.0;
+            waypoint_marker.color.b = 1.0;
+
+            waypoint_marker.pose.position.x = all_waypoints_from_global_planner_[i].x;
+            waypoint_marker.pose.position.y = all_waypoints_from_global_planner_[i].y;
+            waypoint_marker.pose.position.z = 0.0;
+
+            tf2::Quaternion quaternion;
+            quaternion.setRPY(0, 0, all_waypoints_from_global_planner_[i].heading);
+            waypoint_marker.pose.orientation.x = quaternion.x();
+            waypoint_marker.pose.orientation.y = quaternion.y();
+            waypoint_marker.pose.orientation.z = quaternion.z();
+            waypoint_marker.pose.orientation.w = quaternion.w();
+
+            waypoint_marker.scale.x = 0.6; // Arrow length
+            waypoint_marker.scale.y = 0.2; // Arrow width
+            waypoint_marker.scale.z = 0.2; // Arrow height
+
+
+        global_planner_markers_.markers.push_back(waypoint_marker);
+    }
+    global_planner_publisher_->publish(global_planner_markers_);
 }
 
 // =============================
@@ -447,9 +492,9 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     // // clearAllMarkers();
     // publishBestPathFromFlat(flat_a, best_a, 1); // green color for the flat implementation
 
-    // TreeFlat flat;
-    // int best = generateTrajectoryTree_AStar_flat(current_node->Current_state, flat);
-    // publishBestPathFromFlat(flat, best, 1); // green color for the flat implementation
+    TreeFlat flat;
+    int best = generateTrajectoryTree_AStar_flat(current_node->Current_state, flat);
+    publishBestPathFromFlat(flat, best, 1); // green color for the flat implementation
 
 
     TreeFlat flat_map;
@@ -461,14 +506,7 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     cout << blue << "Execution time for path selection: " << duration << " ms" << reset << endl;
 }
 
-// =============================
-// callback for the graph of the lane elements
-// =============================
-void path_planning::full_graph_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
-{
-    full_graph_ = msg;
-}       
-
+  
 void path_planning::motionCommands()
 {
     int direction = 1;

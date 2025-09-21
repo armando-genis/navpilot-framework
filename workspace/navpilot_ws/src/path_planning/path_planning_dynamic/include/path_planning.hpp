@@ -170,6 +170,10 @@ private:
     int start_lanelet_id_;
     int end_lanelet_id_;
 
+    std::vector<point_struct> all_waypoints_from_global_planner_;  // waypoint with the central path and the neighbor lanelets
+    visualization_msgs::msg::MarkerArray global_planner_markers_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_planner_publisher_;
+    void publishGlobalPlanner();
     // =============================
     // map combination and convine with the map obstacles
     // =============================
@@ -213,11 +217,6 @@ private:
     int half_square = square_size / 2;
 
     std::shared_ptr<planner::Node> current_node;
-
-    // subcrition for the graph of the lane elements
-    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr full_graph_publisher_sub_;
-    void full_graph_callback(const visualization_msgs::msg::MarkerArray::SharedPtr msg);
-    std::shared_ptr<visualization_msgs::msg::MarkerArray> full_graph_;
 
     // visualization functions
     void clearAllMarkers();

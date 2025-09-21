@@ -999,7 +999,6 @@ void waypoints_routing::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, r
     std::cout << green << "All neighbor points generated with " << all_neighbor_points.size() << " points" << reset << std::endl;
 }
 
-// NEW FUNCTION: Curve-aware trajectory compatibility checking
 bool waypoints_routing::isCompatibleTrajectory(const lanelet::ConstLanelet &path_lanelet, const lanelet::ConstLanelet &candidate_lanelet, routing::RoutingGraphUPtr &routingGraph, const routing::LaneletPath &shortestPath, lanelet::LaneletMapPtr &map)
 {
     auto path_points = path_lanelet.centerline3d();
