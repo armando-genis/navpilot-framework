@@ -218,9 +218,6 @@ private:
 
     std::shared_ptr<planner::Node> current_node;
 
-    // visualization functions
-    void clearAllMarkers();
-
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_nodes_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
@@ -228,9 +225,6 @@ private:
     struct RelSample { double x, y, heading; };
     std::vector<std::vector<RelSample>> precomputed_rel_; // [cmd][step]
     void precomputeCommandSamples();
-    void publishRealTrajectoriesFromFlat(const TreeFlat& flat);
-
-    TreeFlat generateTrajectoryTree_flat(const State& root_state);
 
     // ---- scoring weights (tune as needed) ----
     double W_FORWARD = 1.0;   // maximize forward progress
@@ -247,26 +241,28 @@ private:
     // Build chain indices root->leaf
     inline void build_chain_indices(const TreeFlat& flat, int leaf_idx, std::vector<int>& chain) const;
 
-    // Score one leaf using flat data only
-    double score_leaf(const TreeFlat& flat, int leaf_idx, const State& start) const;
-
-    // Pick the best leaf (min cost)
-    int select_best_leaf(const TreeFlat& flat, const State& start) const;
-
-    // Materialize only ONE leaf chain back into shared_ptr<planner::Node>
-    std::shared_ptr<planner::Node> materialize_one_leaf_chain(const TreeFlat& flat, int leaf_idx);
-
     // publish the best path from the flat tree
     void publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, int color_idx);
 
-
-    // generate the trajectory based on the A* algorithm
-    int generateTrajectoryTree_AStar_flat(const State& root_state, TreeFlat& out);
-
-    // generate the trajectory based on the flat tree
+    // generate the trajectory based on the flat tree on the A* algorithm
     int generateTrajectoryTree_AStar_flat_map(const State& root_state, TreeFlat& out);
+    int generateTrajectoryTree_AStar_flat_map_with_waypoints(const State& root_state, TreeFlat& out);
+
     void buildDistanceField();
     double clearanceMeters(int gx, int gy) const;
+
+    // --- waypoint attraction (priority-aware) ---
+    cv::Mat dist_wp1_m_;   // meters to priority-1 path
+    cv::Mat dist_wp2_m_;   // meters to priority-2 path
+    bool has_wp1_ = false;
+    bool has_wp2_ = false;
+
+    double W_WP1 = 0.9;    // weight for distance to prio-1 path (tune)
+    double W_WP2 = 0.4;    // weight for distance to prio-2 path (tune)
+    double WP_STROKE_RADIUS_CELLS = 2.0; // thickness when rasterizing lines
+
+    void buildWaypointDistanceFields();  // builds dist_wp1_m_ / dist_wp2_m_
+
 
 public:
     path_planning();

@@ -5,7 +5,7 @@ path_planning_node:
     axleToFront: 1.1
     axleToBack: 1.2
     width: 1.9
-    pathLength: 3
+    pathLength: 4
     step_car: 0.3
     tree_depth: 13
     branching_factor: 5
