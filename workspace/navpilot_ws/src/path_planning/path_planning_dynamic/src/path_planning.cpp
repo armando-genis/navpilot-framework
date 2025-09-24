@@ -45,8 +45,6 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     occupancy_grid_pub_test_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
         "/occupancy_grid_obstacles", 10);
     
-    real_nodes_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/real_nodes", 10);
-
     real_trajectories_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/real_trajectories_option_1", 10);
 
@@ -55,6 +53,9 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
 
     global_planner_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/global_planner", 10);
+
+    closest_waypoint_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
+        "/closest_waypoint_marker", 10);
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -91,7 +92,6 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     publishGlobalPlanner();
 }
 
-
 path_planning::~path_planning()
 {
 }
@@ -117,12 +117,58 @@ void path_planning::getCurrentRobotState()
         // Create/refresh the current node with updated car state
         vector<State> empty_trajectory = {*car_state_};
         current_node = std::make_shared<planner::Node>(*car_state_, empty_trajectory, 0.0, 0.0, 1, std::weak_ptr<planner::Node>());
+
+        compute_closest_waypoint();
     }
 
     catch (tf2::TransformException &ex)
     {
         std::cout << red << "Transform error: " << ex.what() << reset << std::endl;
     }
+}
+
+// =============================
+// get the closest waypoint to the car
+// =============================
+void path_planning::compute_closest_waypoint()
+{
+    if (all_waypoints_from_global_planner_.empty())
+    {
+        std::cout << red << "Warning: all_waypoints_from_global_planner_ is not available. Skipping close waypoint computation." << reset << std::endl;
+        return;
+    }
+
+    constexpr size_t first_wp = 0;
+    const size_t last_wp = all_waypoints_from_global_planner_.size() - 1;
+    constexpr int search_offset_back = 5;
+    constexpr int search_offset_forward = 15;
+
+    int search_start = std::max(static_cast<int>(closest_waypoint) - search_offset_back, static_cast<int>(first_wp));
+    int search_end = std::min(static_cast<int>(closest_waypoint) + search_offset_forward, static_cast<int>(last_wp));
+
+    double smallest_curr_distance = std::numeric_limits<double>::max();
+
+    for (int i = search_start; i <= search_end; i++)
+    {
+        double curr_distance = getDistanceFromOdom(all_waypoints_from_global_planner_[i]);
+        if (smallest_curr_distance > curr_distance)
+        {
+            closest_waypoint = i;
+            smallest_curr_distance = curr_distance;
+        }
+    }
+    std::cout << green << "Closest waypoint: " << closest_waypoint << reset << std::endl;
+    publish_closest_waypoint_marker();
+}
+
+double path_planning::getDistanceFromOdom(const point_struct& waypoint)
+{
+    double x1 = waypoint.x;
+    double y1 = waypoint.y;
+    double x2 = car_state_->x;
+    double y2 = car_state_->y;
+    double distance = sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
+    return distance;
 }
 
 // =============================
@@ -168,6 +214,49 @@ void path_planning::publishGlobalPlanner()
         global_planner_markers_.markers.push_back(waypoint_marker);
     }
     global_planner_publisher_->publish(global_planner_markers_);
+}
+
+void path_planning::publish_closest_waypoint_marker()
+{
+    if (all_waypoints_from_global_planner_.empty() || closest_waypoint >= all_waypoints_from_global_planner_.size())
+    {
+        return;
+    }
+
+    // Create marker for the closest waypoint
+    visualization_msgs::msg::Marker marker;
+    marker.header.frame_id = "map";
+    marker.header.stamp = this->now();
+    marker.ns = "closest_waypoint";
+    marker.id = 0;
+    marker.type = visualization_msgs::msg::Marker::SPHERE;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+
+    // Set the position to the closest waypoint
+    const auto& waypoint = all_waypoints_from_global_planner_[closest_waypoint];
+    marker.pose.position.x = waypoint.x;
+    marker.pose.position.y = waypoint.y;
+    marker.pose.position.z = 0.0;
+
+    // Set orientation (identity quaternion)
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.0;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 1.0;
+
+    // Set scale (size of the sphere)
+    marker.scale.x = 0.9;
+    marker.scale.y = 0.9;
+    marker.scale.z = 0.9;
+
+    // Set color (bright green for visibility)
+    marker.color.r = 0.0;
+    marker.color.g = 1.0;
+    marker.color.b = 0.0;
+    marker.color.a = 1.0;
+
+    // Publish the marker
+    closest_waypoint_marker_publisher_->publish(marker);
 }
 
 // =============================
@@ -478,7 +567,6 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     }
 
     buildDistanceField();
-    buildWaypointDistanceFields();
     grid_map_ = std::make_shared<Grid_map>(*rescaled_chunk_);
     grid_map_->setcarData(car_data_);
 
@@ -491,10 +579,6 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     TreeFlat flat;
     int best = generateTrajectoryTree_AStar_flat_map(current_node->Current_state, flat);
     publishBestPathFromFlat(flat, best, 1); // green color for the flat implementation
-
-    TreeFlat flat_map;
-    int best_map = generateTrajectoryTree_AStar_flat_map_with_waypoints(current_node->Current_state, flat_map);
-    publishBestPathFromFlat(flat_map, best_map, 2); // blue color for the A* implementation with waypoints
 
 
     auto end_time = std::chrono::system_clock::now();
@@ -773,246 +857,6 @@ int path_planning::generateTrajectoryTree_AStar_flat_map(const State& root_state
     return best_goal_idx;
 }
 
-int path_planning::generateTrajectoryTree_AStar_flat_map_with_waypoints(const State& root_state, TreeFlat& out)
-{
-    out.nodes.clear();
-    out.leaves.clear();
-
-    const int B = std::max(1, branching_factor);
-    const int D = std::max(0, tree_depth);
-    const int EFFECTIVE_DEPTH = (D > 0) ? (D - 1) : 0;
-
-    // Ensure motion samples exist for current commands
-    if ((int)precomputed_rel_.size() != B) {
-        precomputeCommandSamples();
-    }
-
-    // Start-frame axes (for forward/lateral projections at termination)
-    const double cs0 = std::cos(root_state.heading);
-    const double ss0 = std::sin(root_state.heading);
-
-    // Reserve roughly B^(depth) nodes (capped)
-    size_t max_nodes = 1, powB = 1;
-    for (int d = 0; d < EFFECTIVE_DEPTH; ++d) { powB *= (size_t)B; max_nodes += powB; }
-    max_nodes = std::min(max_nodes, (size_t)500000);
-    out.nodes.reserve(max_nodes);
-
-    // Root
-    FlatNode root;
-    root.state  = root_state;
-    root.parent = -1;
-    root.steer  = 0.0;
-    root.dir    = 1;
-    root.depth  = 0;
-    root.cost   = 0.0;     // g(root)
-    out.nodes.push_back(root);
-
-    // Best goal found so far
-    int    best_goal_idx   = -1;
-    double best_goal_cost  = std::numeric_limits<double>::infinity();
-
-    // OPEN and best-g (duplicate suppression on lattice)
-    std::priority_queue<PQItem> open;
-    std::unordered_map<LatticeKey, double, LatticeKeyHash> best_g;
-
-    auto stateKey = [&](const State& s)->LatticeKey {
-        return LatticeKey{ s.gridx, s.gridy, heading_bin(s.heading) };
-    };
-
-    // Admissible LB heuristic: only forward reward remaining
-    auto h_lower_bound = [&](int depth)->double {
-        const int remaining_segments = EFFECTIVE_DEPTH - depth;
-        if (remaining_segments <= 0) return 0.0;
-        const int remaining_steps = remaining_segments * pathLength;
-        return -W_FORWARD * (remaining_steps * step_car);
-    };
-
-    // Push root
-    {
-        LatticeKey k = stateKey(root.state);
-        best_g[k] = 0.0;
-        const double f0 = 0.0 + h_lower_bound(0);
-        open.push(PQItem{0, f0, 0.0});
-    }
-
-    // Safe sampler for waypoint distance fields (returns meters; 0 if out of range/none)
-    auto sample_wp_dist = [&](int gx, int gy)->double {
-        // Prefer prio-1 if available in this chunk, else prio-2, else no attraction
-        if (has_wp1_ && !dist_wp1_m_.empty()) {
-            if (gy >= 0 && gy < dist_wp1_m_.rows && gx >= 0 && gx < dist_wp1_m_.cols) {
-                return (double)dist_wp1_m_.at<float>(gy, gx) * W_WP1;
-            }
-            return 0.0;
-        } else if (has_wp2_ && !dist_wp2_m_.empty()) {
-            if (gy >= 0 && gy < dist_wp2_m_.rows && gx >= 0 && gx < dist_wp2_m_.cols) {
-                return (double)dist_wp2_m_.at<float>(gy, gx) * W_WP2;
-            }
-            return 0.0;
-        }
-        return 0.0;
-    };
-
-    // Expand parent->child for motion index ci (returns child idx or -1)
-    auto expand_one = [&](int parent_idx, size_t ci)->int {
-        const FlatNode& parent = out.nodes[parent_idx];
-
-        // rotate once for parent.heading
-        const double cp = std::cos(parent.state.heading);
-        const double sp = std::sin(parent.state.heading);
-
-        const auto& seq = precomputed_rel_[ci];
-
-        State   last = parent.state;
-        double  obs_pen_sum = 0.0;  // clearance penalty accumulator this segment
-        double  wp_pen_sum  = 0.0;  // waypoint attraction accumulator (meters * weight)
-
-        for (int k = 0; k < pathLength; ++k) {
-            const auto& r = seq[k];
-
-            State ns;
-            ns.x = parent.state.x + cp * r.x - sp * r.y;
-            ns.y = parent.state.y + sp * r.x + cp * r.y;
-            ns.z = parent.state.z;
-            ns.heading = parent.state.heading + r.heading;
-
-            auto cell = grid_map_->toCellID(ns);
-            ns.gridx = std::get<0>(cell);
-            ns.gridy = std::get<1>(cell);
-
-            // Hard collision check.
-            // NOTE: if isSingleStateCollisionFreeImproved() returns "true means collision-free",
-            //       invert the condition below (i.e., if (!collisionFree) reject).
-            if (grid_map_->isSingleStateCollisionFreeImproved(ns)) {
-                return -1; // reject whole segment on collision (adjust if API semantics differ)
-            }
-
-            // Soft clearance penalty using distance field
-            const double d = clearanceMeters(ns.gridx, ns.gridy); // meters
-            if (d < SAFE_CLEAR) obs_pen_sum += (SAFE_CLEAR - d);
-
-            // Waypoint attraction (distance to prio-1 if present, else prio-2)
-            wp_pen_sum += sample_wp_dist(ns.gridx, ns.gridy);
-
-            last = ns;
-        }
-
-        // Child node
-        FlatNode child;
-        child.state  = last;
-        child.parent = parent_idx;
-        child.depth  = parent.depth + 1;
-        child.steer  = motionCommand[ci][0];
-        child.dir    = (int)motionCommand[ci][1];
-
-        // Costs
-        const double steer_pen  = W_STEER   * std::fabs(child.steer);
-        const double dsteer_pen = W_DSTEER  * std::fabs(child.steer - parent.steer);
-
-        // forward reward measured in the start frame
-        const double dx = (last.x - parent.state.x);
-        const double dy = (last.y - parent.state.y);
-        const double forward_inc =  dx * cs0 + dy * ss0;
-
-        // Average penalties over steps for scale stability
-        const double obs_pen = W_OBS * (obs_pen_sum / std::max(1, pathLength));
-        const double wp_pen  = (wp_pen_sum / std::max(1, pathLength)); // already includes W_WP{1,2}
-
-        const double g_child = out.nodes[parent_idx].cost
-                             + steer_pen
-                             + dsteer_pen
-                             + obs_pen
-                             + wp_pen
-                             - W_FORWARD * forward_inc;
-
-        child.cost = g_child; // store g
-
-        // Duplicate suppression on lattice key
-        LatticeKey ck = stateKey(child.state);
-        auto it = best_g.find(ck);
-        if (it != best_g.end() && g_child >= it->second - 1e-12) {
-            return -1; // dominated
-        }
-        best_g[ck] = g_child;
-
-        out.nodes.push_back(child);
-        return static_cast<int>(out.nodes.size()) - 1;
-    };
-
-    // A* loop
-    while (!open.empty())
-    {
-        PQItem cur = open.top(); open.pop();
-
-        const int idx   = cur.idx;
-        const auto& fn  = out.nodes[idx];
-        const double g  = fn.cost;
-        const int    d  = fn.depth;
-
-        // stale entry?
-        if (std::fabs(g - cur.g_copy) > 1e-12) continue;
-
-        // Goal at EFFECTIVE_DEPTH → add terminal terms and maybe terminate
-        if (d == EFFECTIVE_DEPTH)
-        {
-            const double dx = fn.state.x - root_state.x;
-            const double dy = fn.state.y - root_state.y;
-            const double lateral = -dx * ss0 + dy * cs0;
-            const double head_err = std::fabs(wrapAngle(fn.state.heading - root_state.heading));
-
-            const double total = g
-                               + W_LAT  * std::fabs(lateral)
-                               + W_HEAD * head_err;
-
-            if (total < best_goal_cost) {
-                best_goal_cost = total;
-                best_goal_idx  = idx;
-            }
-
-            if (!open.empty() && open.top().f_est >= best_goal_cost - 1e-12) break;
-            continue;
-        }
-
-        // Expand children
-        bool produced_child = false;
-        for (size_t ci = 0; ci < motionCommand.size(); ++ci)
-        {
-            const int child_idx = expand_one(idx, ci);
-            if (child_idx < 0) continue;
-            produced_child = true;
-
-            const auto& ch = out.nodes[child_idx];
-            const double h = h_lower_bound(ch.depth);
-            open.push(PQItem{child_idx, ch.cost + h, ch.cost});
-        }
-
-        // Dead-end → treat as candidate goal too
-        if (!produced_child)
-        {
-            const double dx = fn.state.x - root_state.x;
-            const double dy = fn.state.y - root_state.y;
-            const double lateral = -dx * ss0 + dy * cs0;
-            const double head_err = std::fabs(wrapAngle(fn.state.heading - root_state.heading));
-
-            const double total = g
-                               + W_LAT  * std::fabs(lateral)
-                               + W_HEAD * head_err;
-
-            if (total < best_goal_cost) {
-                best_goal_cost = total;
-                best_goal_idx  = idx;
-            }
-            if (!open.empty() && open.top().f_est >= best_goal_cost - 1e-12) break;
-        }
-    }
-
-    // Keep the best leaf for downstream publishing
-    out.leaves.clear();
-    if (best_goal_idx >= 0) out.leaves.push_back(best_goal_idx);
-
-    return best_goal_idx;
-}
-
-
 // =============================
 //  helper functions for the A* algorithm
 // =============================
@@ -1066,99 +910,16 @@ inline double path_planning::clearanceMeters(int gx, int gy) const
     return static_cast<double>(dist_m_.at<float>(gy, gx));
 }
 
-void path_planning::buildWaypointDistanceFields()
+// =============================
+// medium planner to get the path from the global planer
+// =============================
+
+int path_planning::generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat& out)
 {
-    dist_wp1_m_.release();
-    dist_wp2_m_.release();
-    has_wp1_ = false;
-    has_wp2_ = false;
-
-    if (!rescaled_chunk_ || rescaled_chunk_->data.empty()) return;
-
-    const int H = static_cast<int>(rescaled_chunk_->info.height);
-    const int W = static_cast<int>(rescaled_chunk_->info.width);
-    const double res = rescaled_chunk_->info.resolution;
-
-    // Binary canvases for each priority: 255 where path pixels live, 0 elsewhere
-    cv::Mat bin1(H, W, CV_8UC1, cv::Scalar(0));
-    cv::Mat bin2(H, W, CV_8UC1, cv::Scalar(0));
-
-    auto worldToGrid = [&](double x, double y, int& gx, int& gy) {
-        gx = static_cast<int>((x - rescaled_chunk_->info.origin.position.x) / res);
-        gy = static_cast<int>((y - rescaled_chunk_->info.origin.position.y) / res);
-    };
-
-    // Helper to draw a thick line in grid space
-    auto drawThickLine = [&](cv::Mat& img, int x0, int y0, int x1, int y1, int radius) {
-        cv::LineIterator it(img, cv::Point(x0, y0), cv::Point(x1, y1));
-        for (int i = 0; i < it.count; ++i, ++it) {
-            cv::circle(img, it.pos(), radius, cv::Scalar(255), cv::FILLED);
-        }
-    };
-
-    // Group consecutive waypoints by priority and draw lines between neighbors
-    auto drawByPriority = [&](int prio, cv::Mat& canvas, bool& has_any) {
-        std::vector<cv::Point> pts;
-        pts.reserve(all_waypoints_from_global_planner_.size());
-
-        // Collect all in-chunk points for this priority
-        for (const auto& p : all_waypoints_from_global_planner_) {
-            if (p.priority != prio) continue;
-            int gx, gy;
-            worldToGrid(p.x, p.y, gx, gy);
-            if (gx >= 0 && gx < W && gy >= 0 && gy < H) {
-                pts.emplace_back(gx, gy);
-            }
-        }
-
-        // Draw segments between consecutive in-chunk points
-        if (pts.size() >= 1) {
-            has_any = true;
-            const int rad = std::max(1, (int)std::round(WP_STROKE_RADIUS_CELLS));
-            // Densify by connecting consecutive points
-            for (size_t i = 1; i < pts.size(); ++i) {
-                drawThickLine(canvas, pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y, rad);
-            }
-            // Also mark isolated singletons
-            for (const auto& q : pts) {
-                cv::circle(canvas, q, rad, cv::Scalar(255), cv::FILLED);
-            }
-        }
-    };
-
-    drawByPriority(1, bin1, has_wp1_);
-    drawByPriority(2, bin2, has_wp2_);
-
-    // If there is no prio-1 in chunk, keep bin1 empty; same for prio-2.
-    auto toMetersDist = [&](const cv::Mat& bin, cv::Mat& out_m) {
-        if (cv::countNonZero(bin) == 0) {
-            out_m.release(); // no geometry to attract to
-            return;
-        }
-        cv::Mat inv; // distanceTransform wants non-zero free area as source; we want distance TO the path
-        // Build "feature" mask: 255 at path pixels, 0 elsewhere; we want distance TO those features,
-        // so invert to a mask where features are 0 and background is 255, then DT that.
-        cv::Mat feat = 255 - bin;
-
-        cv::Mat dist_px;
-        cv::distanceTransform(feat, dist_px, cv::DIST_L2, 3);
-
-        out_m.create(bin.rows, bin.cols, CV_32FC1);
-        const float scale = static_cast<float>(res);
-        for (int y = 0; y < bin.rows; ++y) {
-            const float* src = dist_px.ptr<float>(y);
-            float*       dst = out_m.ptr<float>(y);
-            for (int x = 0; x < bin.cols; ++x) dst[x] = src[x] * scale;
-        }
-    };
-
-    toMetersDist(bin1, dist_wp1_m_);
-    toMetersDist(bin2, dist_wp2_m_);
-
-    // Reconcile availability flags with actual outputs
-    has_wp1_ = has_wp1_ && !dist_wp1_m_.empty();
-    has_wp2_ = has_wp2_ && !dist_wp2_m_.empty();
+    out.nodes.clear();
+    out.leaves.clear();
 }
+
 
 
 // =============================

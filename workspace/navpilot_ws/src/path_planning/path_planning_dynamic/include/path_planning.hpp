@@ -159,6 +159,10 @@ private:
 
     // function to get the state (position) of the car
     void getCurrentRobotState();
+    // function to get the closest waypoint to the car
+    size_t closest_waypoint = 0;  // index of the closest waypoint to the car
+    void compute_closest_waypoint();
+    double getDistanceFromOdom(const point_struct& waypoint);
 
     // =============================
     // global planner
@@ -173,7 +177,9 @@ private:
     std::vector<point_struct> all_waypoints_from_global_planner_;  // waypoint with the central path and the neighbor lanelets
     visualization_msgs::msg::MarkerArray global_planner_markers_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_planner_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr closest_waypoint_marker_publisher_;
     void publishGlobalPlanner();
+    void publish_closest_waypoint_marker();
     // =============================
     // map combination and convine with the map obstacles
     // =============================
@@ -218,7 +224,6 @@ private:
 
     std::shared_ptr<planner::Node> current_node;
 
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_nodes_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
 
@@ -227,16 +232,16 @@ private:
     void precomputeCommandSamples();
 
     // ---- scoring weights (tune as needed) ----
-    double W_FORWARD = 1.0;   // maximize forward progress
+    double W_FORWARD = 0.8;   // maximize forward progress
     double W_LAT     = 0.3;   // penalize lateral offset from current heading axis
-    double W_STEER   = 0.1;   // penalize steering effort (sum |steer| along chain)
-    double W_HEAD    = 0.2;   // penalize heading error vs current heading (or goal)
+    double W_STEER   = 0.18;   // penalize steering effort (sum |steer| along chain)
+    double W_HEAD    = 0.25;   // penalize heading error vs current heading (or goal)
 
     cv::Mat dist_m_; // distance matrix for the A* algorithm
 
     double SAFE_CLEAR = 0.8;    // meters: half vehicle width + margin
     double W_OBS      = 1.2;    // weight for clearance penalty
-    double W_DSTEER   = 0.05;   // weight for smoothness (|Δsteer|)
+    double W_DSTEER   = 0.12;   // weight for smoothness (|Δsteer|)
 
     // Build chain indices root->leaf
     inline void build_chain_indices(const TreeFlat& flat, int leaf_idx, std::vector<int>& chain) const;
@@ -246,22 +251,17 @@ private:
 
     // generate the trajectory based on the flat tree on the A* algorithm
     int generateTrajectoryTree_AStar_flat_map(const State& root_state, TreeFlat& out);
-    int generateTrajectoryTree_AStar_flat_map_with_waypoints(const State& root_state, TreeFlat& out);
 
     void buildDistanceField();
     double clearanceMeters(int gx, int gy) const;
 
-    // --- waypoint attraction (priority-aware) ---
-    cv::Mat dist_wp1_m_;   // meters to priority-1 path
-    cv::Mat dist_wp2_m_;   // meters to priority-2 path
-    bool has_wp1_ = false;
-    bool has_wp2_ = false;
 
-    double W_WP1 = 0.9;    // weight for distance to prio-1 path (tune)
-    double W_WP2 = 0.4;    // weight for distance to prio-2 path (tune)
-    double WP_STROKE_RADIUS_CELLS = 2.0; // thickness when rasterizing lines
+    // =============================
+    // medium planner to get the path from the global planer
+    // =============================
 
-    void buildWaypointDistanceFields();  // builds dist_wp1_m_ / dist_wp2_m_
+    int generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat& out);
+
 
 
 public:
