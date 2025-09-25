@@ -40,7 +40,7 @@ private:
     std::string reset = "\033[0m";
 
     //global planner parameters
-    double waypoint_interval = 1.0;
+    double waypoint_interval = 0.5;
     int start_lanelet_id_ = 0;
     int end_lanelet_id_ = 0;
     double x_offset_ = 0.0;

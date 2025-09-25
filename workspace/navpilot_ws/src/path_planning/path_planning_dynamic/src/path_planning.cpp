@@ -57,6 +57,12 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     closest_waypoint_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(
         "/closest_waypoint_marker", 10);
 
+    planner_waypoints_available_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/planner_waypoints_available", 10);
+
+    planner_waypoint_polygons_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/planner_waypoint_vehicle_polygons", 10);
+
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     rescaled_chunk_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -576,10 +582,14 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
         occupancy_grid_pub_test_->publish(*rescaled_chunk_);
     }
 
+    TreeFlat_global_planner flat_global_planner;
+    int best_global = generateTajectoyTree_from_global_planer(current_node->Current_state, flat_global_planner);
+    publish_planner_waypoints_available();
+    publish_planner_waypoint_polygons();
+
     TreeFlat flat;
     int best = generateTrajectoryTree_AStar_flat_map(current_node->Current_state, flat);
     publishBestPathFromFlat(flat, best, 1); // green color for the flat implementation
-
 
     auto end_time = std::chrono::system_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - init_time).count();
@@ -913,13 +923,132 @@ inline double path_planning::clearanceMeters(int gx, int gy) const
 // =============================
 // medium planner to get the path from the global planer
 // =============================
-
-int path_planning::generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat& out)
+int path_planning::generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat_global_planner& out)
 {
     out.nodes.clear();
     out.leaves.clear();
+
+    planner_waypoints_available.clear();
+
+    for (const auto& wp : all_waypoints_from_global_planner_)
+    {
+        State WaypointState_;
+        WaypointState_.x = wp.x;
+        WaypointState_.y = wp.y;
+        WaypointState_.heading = wp.heading;
+
+        // Check if the center waypoint is collision free
+        bool collision = grid_map_->isSingleStateCollisionFreeImproved(WaypointState_);
+
+        if (!collision)
+        {
+            planner_waypoints_available.push_back(wp);
+        }
+
+    }
+
+    return 0;
 }
 
+void path_planning::publish_planner_waypoints_available()
+{
+    visualization_msgs::msg::MarkerArray msg;
+
+    // delete ALL previous markers from this namespace to avoid stale ones
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "planner_waypoints_available"; msg.markers.push_back(clear);
+
+    int marker_id = 0;
+    for (const auto& wp : planner_waypoints_available)
+    {
+        visualization_msgs::msg::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = this->now();
+        marker.ns = "planner_waypoints_available";
+        marker.id = marker_id++;
+        marker.type = visualization_msgs::msg::Marker::SPHERE;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.pose.position.x = wp.x;
+        marker.pose.position.y = wp.y;
+        marker.pose.position.z = 0.0;
+        marker.scale.x = 0.5;
+        marker.scale.y = 0.5;
+        marker.scale.z = 0.5;
+        marker.color.a = 1.0;
+        marker.color.r = 1.0;
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        msg.markers.push_back(marker);
+    }
+    planner_waypoints_available_publisher_->publish(msg);
+}
+
+
+void path_planning::publish_planner_waypoint_polygons()
+{
+    if (planner_waypoint_polygons_publisher_->get_subscription_count() == 0) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray msg;
+
+    // delete ALL previous markers from this namespace to avoid stale ones
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "planner_waypoint_vehicle_polygons"; msg.markers.push_back(clear);
+
+    int id = 0;
+    for (const auto& wp : planner_waypoints_available)
+    {
+        State s;
+        s.x = wp.x;
+        s.y = wp.y;
+        s.z = 0.0;
+        s.heading = wp.heading;
+
+        geometry_msgs::msg::Polygon poly = car_data_.getVehicleGeometry_state(s);
+
+        visualization_msgs::msg::Marker line_strip;
+        line_strip.header.frame_id = "map";
+        line_strip.header.stamp = this->now();
+        line_strip.ns = "planner_waypoint_vehicle_polygons";
+        line_strip.id = id++;
+        line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line_strip.action = visualization_msgs::msg::Marker::ADD;
+        line_strip.scale.x = 0.05; // line width
+        line_strip.color.a = 1.0;
+        line_strip.color.r = 0.0;
+        line_strip.color.g = 1.0;
+        line_strip.color.b = 1.0;
+
+        // convert polygon points into a closed line strip
+        for (const auto& pt : poly.points)
+        {
+            geometry_msgs::msg::Point p;
+            p.x = pt.x;
+            p.y = pt.y;
+            p.z = 0.05;
+            line_strip.points.push_back(p);
+        }
+        if (!poly.points.empty())
+        {
+            geometry_msgs::msg::Point p0;
+            p0.x = poly.points.front().x;
+            p0.y = poly.points.front().y;
+            p0.z = 0.05;
+            line_strip.points.push_back(p0);
+        }
+
+        msg.markers.push_back(line_strip);
+    }
+
+    planner_waypoint_polygons_publisher_->publish(msg);
+}
 
 
 // =============================

@@ -5,6 +5,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/polygon.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <std_msgs/msg/int32.hpp>
@@ -68,6 +69,18 @@ struct FlatNode {
 
 struct TreeFlat {
   std::vector<FlatNode> nodes;   // flat storage of all nodes
+  std::vector<int>      leaves;  // indices of leaf nodes in `nodes`
+};
+
+struct FlatNode_global_planner {
+  State state;          // last state of this segment
+  int   parent;         // index in `nodes` (-1 for root)
+  double cost;          // cumulative path cost (fill as you like)
+  int priority;         // priority of the waypoint
+};
+
+struct TreeFlat_global_planner {
+  std::vector<FlatNode_global_planner> nodes;   // flat storage of all nodes
   std::vector<int>      leaves;  // indices of leaf nodes in `nodes`
 };
 
@@ -260,7 +273,16 @@ private:
     // medium planner to get the path from the global planer
     // =============================
 
-    int generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat& out);
+    int generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat_global_planner& out);
+
+    std::vector<point_struct> planner_waypoints_available;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoints_available_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoint_polygons_publisher_;
+    int last_planner_waypoints_count_ = 0;
+    int last_waypoint_polygons_count_ = 0;
+
+    void publish_planner_waypoints_available();
+    void publish_planner_waypoint_polygons();
 
 
 
