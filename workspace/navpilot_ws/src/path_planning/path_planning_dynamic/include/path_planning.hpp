@@ -135,6 +135,23 @@ static inline int heading_bin(double theta) {
     return b;
 }
 
+// Forward declarations for Frenet structures
+struct FrenetPoint {
+    double s;  // longitudinal distance along reference path
+    double d;  // lateral distance from reference path
+    double heading_error;  // heading difference from reference
+    double cost;  // total cost for this point
+    size_t waypoint_index;  // index in all_waypoints_from_global_planner_
+    int priority;  // priority from global planner (1=main path, 2=neighbor)
+};
+
+struct FrenetPath {
+    std::vector<FrenetPoint> points;
+    double total_cost;
+    int priority;
+    size_t start_index;  // starting waypoint index
+};
+
 class path_planning : public rclcpp::Node
 {
 private:
@@ -232,7 +249,7 @@ private:
     int branching_factor;  // Number of paths per node (e.g., 5)
 
     // white square parameters
-    int square_size = 20; // Size of the square region in grid cells
+    int square_size = 200; // Size of the square region in grid cells
     int half_square = square_size / 2;
 
     std::shared_ptr<planner::Node> current_node;
@@ -275,14 +292,40 @@ private:
 
     int generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat_global_planner& out);
 
-    std::vector<point_struct> planner_waypoints_available;
+    std::vector<point_struct> planner_waypoints_available;  // All collision-free waypoints
+    std::vector<point_struct> selected_frenet_path_;        // Selected optimal path from Frenet
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoints_available_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoint_polygons_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr frenet_reference_path_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr frenet_selected_path_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr frenet_candidate_paths_publisher_;
     int last_planner_waypoints_count_ = 0;
     int last_waypoint_polygons_count_ = 0;
 
     void publish_planner_waypoints_available();
     void publish_planner_waypoint_polygons();
+    void publish_frenet_reference_path();
+    void publish_frenet_selected_path(const FrenetPath& selected_path);
+    void publish_frenet_candidate_paths(const std::vector<FrenetPath>& candidate_paths);
+
+    // =============================
+    // Frenet coordinate system for path selection
+    // =============================
+    
+    // Frenet coordinate transformation and path selection
+    void computeFrenetCoordinates();
+    FrenetPoint transformToFrenet(const point_struct& waypoint, const std::vector<point_struct>& reference_path, size_t start_idx);
+    std::vector<FrenetPath> groupWaypointsByPriority();
+    FrenetPath selectBestFrenetPath(const std::vector<FrenetPath>& candidate_paths);
+    void updatePlannerWaypointsFromFrenet(const FrenetPath& selected_path);
+    
+    // Frenet path selection parameters
+    double frenet_lookahead_distance_ = 20.0;  // meters to look ahead
+    double frenet_lateral_weight_ = 1.0;       // weight for lateral offset cost
+    double frenet_heading_weight_ = 0.5;       // weight for heading error cost
+    double frenet_priority_weight_ = 2.0;      // weight for priority preference
+    
+    std::vector<point_struct> reference_path_;  // current reference path for Frenet coordinates
 
 
 

@@ -1,4 +1,6 @@
 #include <path_planning.hpp>
+#include <sstream>
+#include <iomanip>
 
 path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clock()), tf2_listener(tf2_buffer)
 {
@@ -62,6 +64,15 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
 
     planner_waypoint_polygons_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/planner_waypoint_vehicle_polygons", 10);
+
+    frenet_reference_path_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/frenet_reference_path", 10);
+
+    frenet_selected_path_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/frenet_selected_path", 10);
+
+    frenet_candidate_paths_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/frenet_candidate_paths", 10);
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -583,7 +594,7 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     }
 
     TreeFlat_global_planner flat_global_planner;
-    int best_global = generateTajectoyTree_from_global_planer(current_node->Current_state, flat_global_planner);
+    generateTajectoyTree_from_global_planer(current_node->Current_state, flat_global_planner);
     publish_planner_waypoints_available();
     publish_planner_waypoint_polygons();
 
@@ -690,7 +701,7 @@ int path_planning::generateTrajectoryTree_AStar_flat_map(const State& root_state
     std::unordered_map<LatticeKey, double, LatticeKeyHash> best_g;
 
     auto stateKey = [&](const State& s)->LatticeKey {
-        return LatticeKey{ s.gridx, s.gridy, heading_bin(s.heading) };
+        return LatticeKey{ static_cast<int>(s.gridx), static_cast<int>(s.gridy), heading_bin(s.heading) };
     };
 
     // Heuristic lower bound from depth d to EFFECTIVE_DEPTH (reward only)
@@ -923,7 +934,7 @@ inline double path_planning::clearanceMeters(int gx, int gy) const
 // =============================
 // medium planner to get the path from the global planer
 // =============================
-int path_planning::generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat_global_planner& out)
+int path_planning::generateTajectoyTree_from_global_planer(const State& /*root_state*/, TreeFlat_global_planner& out)
 {
     out.nodes.clear();
     out.leaves.clear();
@@ -944,8 +955,10 @@ int path_planning::generateTajectoyTree_from_global_planer(const State& root_sta
         {
             planner_waypoints_available.push_back(wp);
         }
-
     }
+
+    // Apply Frenet coordinate system for path selection
+    computeFrenetCoordinates();
 
     return 0;
 }
@@ -1003,7 +1016,7 @@ void path_planning::publish_planner_waypoint_polygons()
     clear.ns = "planner_waypoint_vehicle_polygons"; msg.markers.push_back(clear);
 
     int id = 0;
-    for (const auto& wp : planner_waypoints_available)
+    for (const auto& wp : selected_frenet_path_)
     {
         State s;
         s.x = wp.x;
@@ -1048,6 +1061,638 @@ void path_planning::publish_planner_waypoint_polygons()
     }
 
     planner_waypoint_polygons_publisher_->publish(msg);
+}
+
+// =============================
+// Frenet coordinate system implementation
+// =============================
+void path_planning::computeFrenetCoordinates()
+{
+    if (all_waypoints_from_global_planner_.empty() || closest_waypoint >= all_waypoints_from_global_planner_.size())
+    {
+        std::cout << red << "Cannot compute Frenet coordinates: invalid waypoint data" << reset << std::endl;
+        return;
+    }
+
+    std::cout << green << "Computing Frenet coordinates starting from closest waypoint: " << closest_waypoint << reset << std::endl;
+
+    // Create reference path from priority 1 waypoints (main path) starting from closest waypoint
+    reference_path_.clear();
+    for (size_t i = closest_waypoint; i < all_waypoints_from_global_planner_.size(); ++i)
+    {
+        if (all_waypoints_from_global_planner_[i].priority == 1)
+        {
+            reference_path_.push_back(all_waypoints_from_global_planner_[i]);
+            
+            // Stop when we have enough lookahead distance
+            if (!reference_path_.empty())
+            {
+                double dist = sqrt(pow(all_waypoints_from_global_planner_[i].x - reference_path_[0].x, 2) +
+                                 pow(all_waypoints_from_global_planner_[i].y - reference_path_[0].y, 2));
+                if (dist >= frenet_lookahead_distance_)
+                    break;
+            }
+        }
+    }
+
+    if (reference_path_.size() < 2)
+    {
+        std::cout << red << "Insufficient reference path for Frenet coordinates" << reset << std::endl;
+        return;
+    }
+
+    // Group all available waypoints by priority and convert to Frenet coordinates
+    std::vector<FrenetPath> candidate_paths = groupWaypointsByPriority();
+    
+    if (candidate_paths.empty())
+    {
+        std::cout << red << "No candidate paths found for Frenet selection" << reset << std::endl;
+        return;
+    }
+
+    // Publish all candidate paths for visualization
+    publish_frenet_candidate_paths(candidate_paths);
+
+    // Select the best path using Frenet cost analysis
+    FrenetPath best_path = selectBestFrenetPath(candidate_paths);
+    
+    std::cout << green << "Selected Frenet path with priority " << best_path.priority 
+              << " and cost " << best_path.total_cost << reset << std::endl;
+
+    // Update planner waypoints with selected path
+    updatePlannerWaypointsFromFrenet(best_path);
+    
+    // Publish visualization of reference path and selected path
+    publish_frenet_reference_path();
+    publish_frenet_selected_path(best_path);
+}
+
+FrenetPoint path_planning::transformToFrenet(const point_struct& waypoint, const std::vector<point_struct>& reference_path, size_t /*start_idx*/)
+{
+    FrenetPoint frenet_point;
+    frenet_point.waypoint_index = 0; // Will be set by caller
+    frenet_point.priority = waypoint.priority;
+    
+    if (reference_path.size() < 2)
+    {
+        frenet_point.s = 0.0;
+        frenet_point.d = std::numeric_limits<double>::max();
+        frenet_point.heading_error = 0.0;
+        frenet_point.cost = std::numeric_limits<double>::max();
+        return frenet_point;
+    }
+
+    double min_distance = std::numeric_limits<double>::max();
+    size_t closest_segment = 0;
+    double closest_s = 0.0;
+    double closest_d = 0.0;
+    
+    // Find closest point on reference path
+    double cumulative_s = 0.0;
+    for (size_t i = 0; i < reference_path.size() - 1; ++i)
+    {
+        const auto& p1 = reference_path[i];
+        const auto& p2 = reference_path[i + 1];
+        
+        // Vector from p1 to p2
+        double dx = p2.x - p1.x;
+        double dy = p2.y - p1.y;
+        double segment_length = sqrt(dx*dx + dy*dy);
+        
+        if (segment_length < 1e-6) continue;
+        
+        // Vector from p1 to waypoint
+        double wx = waypoint.x - p1.x;
+        double wy = waypoint.y - p1.y;
+        
+        // Project waypoint onto segment
+        double t = (wx*dx + wy*dy) / (segment_length*segment_length);
+        t = std::max(0.0, std::min(1.0, t)); // Clamp to segment
+        
+        // Closest point on segment
+        double closest_x = p1.x + t*dx;
+        double closest_y = p1.y + t*dy;
+        
+        // Distance to waypoint
+        double distance = sqrt(pow(waypoint.x - closest_x, 2) + pow(waypoint.y - closest_y, 2));
+        
+        if (distance < min_distance)
+        {
+            min_distance = distance;
+            closest_segment = i;
+            closest_s = cumulative_s + t * segment_length;
+            
+            // Calculate lateral distance (positive = left of reference path)
+            double nx = -dy / segment_length; // Normal vector (left direction)
+            double ny = dx / segment_length;
+            closest_d = (waypoint.x - closest_x)*nx + (waypoint.y - closest_y)*ny;
+        }
+        
+        cumulative_s += segment_length;
+    }
+    
+    frenet_point.s = closest_s;
+    frenet_point.d = closest_d;
+    
+    // Calculate heading error
+    if (closest_segment < reference_path.size() - 1)
+    {
+        const auto& ref_point = reference_path[closest_segment];
+        frenet_point.heading_error = std::abs(wrapAngle(waypoint.heading - ref_point.heading));
+    }
+    else
+    {
+        frenet_point.heading_error = 0.0;
+    }
+    
+    // Calculate cost
+    double lateral_cost = frenet_lateral_weight_ * std::abs(frenet_point.d);
+    double heading_cost = frenet_heading_weight_ * frenet_point.heading_error;
+    double priority_cost = frenet_priority_weight_ * (frenet_point.priority - 1); // Priority 1 = 0 cost, Priority 2 = 2.0 cost
+    
+    frenet_point.cost = lateral_cost + heading_cost + priority_cost;
+    
+    return frenet_point;
+}
+
+std::vector<FrenetPath> path_planning::groupWaypointsByPriority()
+{
+    std::map<int, FrenetPath> priority_paths;
+    
+    // Group collision-free waypoints by priority starting from closest waypoint
+    for (size_t i = 0; i < planner_waypoints_available.size(); ++i)
+    {
+        const auto& wp = planner_waypoints_available[i];
+        
+        // Find original index in all_waypoints_from_global_planner_
+        size_t original_index = 0;
+        for (size_t j = 0; j < all_waypoints_from_global_planner_.size(); ++j)
+        {
+            if (all_waypoints_from_global_planner_[j].x == wp.x && 
+                all_waypoints_from_global_planner_[j].y == wp.y &&
+                all_waypoints_from_global_planner_[j].priority == wp.priority)
+            {
+                original_index = j;
+                break;
+            }
+        }
+        
+        // Only consider waypoints at or ahead of the closest waypoint
+        if (original_index < closest_waypoint) continue;
+        
+        // Transform to Frenet coordinates
+        FrenetPoint frenet_point = transformToFrenet(wp, reference_path_, closest_waypoint);
+        frenet_point.waypoint_index = original_index;
+        
+        // Skip points that are too far laterally or behind the current position
+        if (std::abs(frenet_point.d) > 10.0 || frenet_point.s < 0.0) continue;
+        
+        // Add to appropriate priority group
+        if (priority_paths.find(wp.priority) == priority_paths.end())
+        {
+            priority_paths[wp.priority] = FrenetPath();
+            priority_paths[wp.priority].priority = wp.priority;
+            priority_paths[wp.priority].start_index = closest_waypoint;
+        }
+        
+        priority_paths[wp.priority].points.push_back(frenet_point);
+    }
+    
+    // Convert map to vector and calculate total costs
+    std::vector<FrenetPath> result;
+    for (auto& pair : priority_paths)
+    {
+        FrenetPath& path = pair.second;
+        
+        // Sort points by s coordinate (longitudinal distance)
+        std::sort(path.points.begin(), path.points.end(), 
+                  [](const FrenetPoint& a, const FrenetPoint& b) { return a.s < b.s; });
+        
+        // Calculate total cost
+        path.total_cost = 0.0;
+        for (const auto& point : path.points)
+        {
+            path.total_cost += point.cost;
+        }
+        
+        // Normalize by number of points
+        if (!path.points.empty())
+        {
+            path.total_cost /= path.points.size();
+        }
+        
+        result.push_back(path);
+    }
+    
+    return result;
+}
+
+FrenetPath path_planning::selectBestFrenetPath(const std::vector<FrenetPath>& candidate_paths)
+{
+    if (candidate_paths.empty())
+    {
+        return FrenetPath(); // Return empty path
+    }
+    
+    double best_cost = std::numeric_limits<double>::max();
+    size_t best_index = 0;
+    
+    std::cout << blue << "Evaluating " << candidate_paths.size() << " candidate Frenet paths:" << reset << std::endl;
+    
+    for (size_t i = 0; i < candidate_paths.size(); ++i)
+    {
+        const auto& path = candidate_paths[i];
+        
+        std::cout << yellow << "  Path " << i << ": priority=" << path.priority 
+                  << ", points=" << path.points.size() 
+                  << ", avg_cost=" << path.total_cost << reset << std::endl;
+        
+        if (path.total_cost < best_cost)
+        {
+            best_cost = path.total_cost;
+            best_index = i;
+        }
+    }
+    
+    std::cout << green << "Selected path " << best_index << " with cost " << best_cost << reset << std::endl;
+    
+    return candidate_paths[best_index];
+}
+
+void path_planning::updatePlannerWaypointsFromFrenet(const FrenetPath& selected_path)
+{
+    // Clear and update selected path (keep planner_waypoints_available intact)
+    selected_frenet_path_.clear();
+    
+    // Add waypoints from selected Frenet path
+    for (const auto& frenet_point : selected_path.points)
+    {
+        if (frenet_point.waypoint_index < all_waypoints_from_global_planner_.size())
+        {
+            selected_frenet_path_.push_back(all_waypoints_from_global_planner_[frenet_point.waypoint_index]);
+        }
+    }
+    
+    std::cout << green << "Selected Frenet path: " << selected_frenet_path_.size() 
+              << " points from priority " << selected_path.priority << " (available: " 
+              << planner_waypoints_available.size() << " collision-free points)" << reset << std::endl;
+}
+
+void path_planning::publish_frenet_reference_path()
+{
+    if (frenet_reference_path_publisher_->get_subscription_count() == 0 || reference_path_.empty()) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray msg;
+
+    // Clear previous markers
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "frenet_reference_path";
+    msg.markers.push_back(clear);
+
+    // Create line strip for reference path
+    visualization_msgs::msg::Marker line_strip;
+    line_strip.header.frame_id = "map";
+    line_strip.header.stamp = this->now();
+    line_strip.ns = "frenet_reference_path";
+    line_strip.id = 0;
+    line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_strip.action = visualization_msgs::msg::Marker::ADD;
+    line_strip.scale.x = 0.2; // line width
+    line_strip.color.a = 1.0;
+    line_strip.color.r = 0.0;
+    line_strip.color.g = 0.0;
+    line_strip.color.b = 1.0; // Blue color for reference path
+
+    // Add all reference path points
+    for (const auto& wp : reference_path_)
+    {
+        geometry_msgs::msg::Point p;
+        p.x = wp.x;
+        p.y = wp.y;
+        p.z = 0.1;
+        line_strip.points.push_back(p);
+    }
+
+    msg.markers.push_back(line_strip);
+
+    // Add waypoint markers
+    for (size_t i = 0; i < reference_path_.size(); ++i)
+    {
+        visualization_msgs::msg::Marker waypoint_marker;
+        waypoint_marker.header.frame_id = "map";
+        waypoint_marker.header.stamp = this->now();
+        waypoint_marker.ns = "frenet_reference_path";
+        waypoint_marker.id = i + 1;
+        waypoint_marker.type = visualization_msgs::msg::Marker::ARROW;
+        waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+
+        waypoint_marker.pose.position.x = reference_path_[i].x;
+        waypoint_marker.pose.position.y = reference_path_[i].y;
+        waypoint_marker.pose.position.z = 0.1;
+
+        tf2::Quaternion quaternion;
+        quaternion.setRPY(0, 0, reference_path_[i].heading);
+        waypoint_marker.pose.orientation.x = quaternion.x();
+        waypoint_marker.pose.orientation.y = quaternion.y();
+        waypoint_marker.pose.orientation.z = quaternion.z();
+        waypoint_marker.pose.orientation.w = quaternion.w();
+
+        waypoint_marker.scale.x = 0.8; // Arrow length
+        waypoint_marker.scale.y = 0.15; // Arrow width
+        waypoint_marker.scale.z = 0.15; // Arrow height
+
+        waypoint_marker.color.a = 0.8;
+        waypoint_marker.color.r = 0.0;
+        waypoint_marker.color.g = 0.0;
+        waypoint_marker.color.b = 1.0; // Blue
+
+        msg.markers.push_back(waypoint_marker);
+    }
+
+    frenet_reference_path_publisher_->publish(msg);
+}
+
+void path_planning::publish_frenet_selected_path(const FrenetPath& selected_path)
+{
+    if (frenet_selected_path_publisher_->get_subscription_count() == 0 || selected_path.points.empty()) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray msg;
+
+    // Clear previous markers
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "frenet_selected_path";
+    msg.markers.push_back(clear);
+
+    // Create line strip for selected path
+    visualization_msgs::msg::Marker line_strip;
+    line_strip.header.frame_id = "map";
+    line_strip.header.stamp = this->now();
+    line_strip.ns = "frenet_selected_path";
+    line_strip.id = 0;
+    line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_strip.action = visualization_msgs::msg::Marker::ADD;
+    line_strip.scale.x = 0.15; // line width
+    line_strip.color.a = 1.0;
+    
+    // Color based on priority: Priority 1 = Green, Priority 2 = Orange, others = Purple
+    if (selected_path.priority == 1) {
+        line_strip.color.r = 0.0;
+        line_strip.color.g = 1.0;
+        line_strip.color.b = 0.0; // Green for main path
+    } else if (selected_path.priority == 2) {
+        line_strip.color.r = 1.0;
+        line_strip.color.g = 0.5;
+        line_strip.color.b = 0.0; // Orange for neighbor path
+    } else {
+        line_strip.color.r = 1.0;
+        line_strip.color.g = 0.0;
+        line_strip.color.b = 1.0; // Purple for other paths
+    }
+
+    // Add all selected path points
+    for (const auto& frenet_point : selected_path.points)
+    {
+        if (frenet_point.waypoint_index < all_waypoints_from_global_planner_.size())
+        {
+            const auto& wp = all_waypoints_from_global_planner_[frenet_point.waypoint_index];
+            geometry_msgs::msg::Point p;
+            p.x = wp.x;
+            p.y = wp.y;
+            p.z = 0.2; // Slightly higher than reference path
+            line_strip.points.push_back(p);
+        }
+    }
+
+    msg.markers.push_back(line_strip);
+
+    // Add waypoint markers with cost information
+    for (size_t i = 0; i < selected_path.points.size(); ++i)
+    {
+        const auto& frenet_point = selected_path.points[i];
+        if (frenet_point.waypoint_index >= all_waypoints_from_global_planner_.size()) continue;
+        
+        const auto& wp = all_waypoints_from_global_planner_[frenet_point.waypoint_index];
+
+        visualization_msgs::msg::Marker waypoint_marker;
+        waypoint_marker.header.frame_id = "map";
+        waypoint_marker.header.stamp = this->now();
+        waypoint_marker.ns = "frenet_selected_path";
+        waypoint_marker.id = i + 1;
+        waypoint_marker.type = visualization_msgs::msg::Marker::ARROW;
+        waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+
+        waypoint_marker.pose.position.x = wp.x;
+        waypoint_marker.pose.position.y = wp.y;
+        waypoint_marker.pose.position.z = 0.2;
+
+        tf2::Quaternion quaternion;
+        quaternion.setRPY(0, 0, wp.heading);
+        waypoint_marker.pose.orientation.x = quaternion.x();
+        waypoint_marker.pose.orientation.y = quaternion.y();
+        waypoint_marker.pose.orientation.z = quaternion.z();
+        waypoint_marker.pose.orientation.w = quaternion.w();
+
+        waypoint_marker.scale.x = 0.6; // Arrow length
+        waypoint_marker.scale.y = 0.12; // Arrow width
+        waypoint_marker.scale.z = 0.12; // Arrow height
+
+        waypoint_marker.color.a = 0.9;
+        // Same color as line strip
+        waypoint_marker.color.r = line_strip.color.r;
+        waypoint_marker.color.g = line_strip.color.g;
+        waypoint_marker.color.b = line_strip.color.b;
+
+        msg.markers.push_back(waypoint_marker);
+
+        // Add text marker for Frenet coordinates (s, d, cost)
+        visualization_msgs::msg::Marker text_marker;
+        text_marker.header.frame_id = "map";
+        text_marker.header.stamp = this->now();
+        text_marker.ns = "frenet_selected_path";
+        text_marker.id = 1000 + i; // Offset to avoid ID collision
+        text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        text_marker.action = visualization_msgs::msg::Marker::ADD;
+
+        text_marker.pose.position.x = wp.x;
+        text_marker.pose.position.y = wp.y;
+        text_marker.pose.position.z = 0.5; // Above the waypoint
+
+        text_marker.scale.z = 0.3; // Text size
+        text_marker.color.a = 1.0;
+        text_marker.color.r = 1.0;
+        text_marker.color.g = 1.0;
+        text_marker.color.b = 1.0; // White text
+
+        // Format: s=X.X, d=X.X, c=X.X
+        std::ostringstream text_stream;
+        text_stream << std::fixed << std::setprecision(1);
+        text_stream << "s=" << frenet_point.s << "\n";
+        text_stream << "d=" << frenet_point.d << "\n";
+        text_stream << "c=" << frenet_point.cost;
+        text_marker.text = text_stream.str();
+
+        msg.markers.push_back(text_marker);
+    }
+
+    frenet_selected_path_publisher_->publish(msg);
+}
+
+void path_planning::publish_frenet_candidate_paths(const std::vector<FrenetPath>& candidate_paths)
+{
+    if (frenet_candidate_paths_publisher_->get_subscription_count() == 0 || candidate_paths.empty()) {
+        return;
+    }
+
+    visualization_msgs::msg::MarkerArray msg;
+
+    // Clear previous markers
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "frenet_candidate_paths";
+    msg.markers.push_back(clear);
+
+    int path_id = 0;
+    for (const auto& path : candidate_paths)
+    {
+        if (path.points.empty()) continue;
+
+        // Create line strip for this candidate path
+        visualization_msgs::msg::Marker line_strip;
+        line_strip.header.frame_id = "map";
+        line_strip.header.stamp = this->now();
+        line_strip.ns = "frenet_candidate_paths";
+        line_strip.id = path_id * 1000; // Offset IDs by path
+        line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line_strip.action = visualization_msgs::msg::Marker::ADD;
+        line_strip.scale.x = 0.08; // Thinner line for candidates
+        line_strip.color.a = 0.7; // Semi-transparent
+        
+        // Color based on priority: Priority 1 = Light Blue, Priority 2 = Light Orange, others = Light Purple
+        if (path.priority == 1) {
+            line_strip.color.r = 0.5;
+            line_strip.color.g = 0.7;
+            line_strip.color.b = 1.0; // Light blue for main path candidates
+        } else if (path.priority == 2) {
+            line_strip.color.r = 1.0;
+            line_strip.color.g = 0.7;
+            line_strip.color.b = 0.3; // Light orange for neighbor path candidates
+        } else {
+            line_strip.color.r = 1.0;
+            line_strip.color.g = 0.5;
+            line_strip.color.b = 1.0; // Light purple for other paths
+        }
+
+        // Add all candidate path points
+        for (const auto& frenet_point : path.points)
+        {
+            if (frenet_point.waypoint_index < all_waypoints_from_global_planner_.size())
+            {
+                const auto& wp = all_waypoints_from_global_planner_[frenet_point.waypoint_index];
+                geometry_msgs::msg::Point p;
+                p.x = wp.x;
+                p.y = wp.y;
+                p.z = 0.05; // Lower than selected path
+                line_strip.points.push_back(p);
+            }
+        }
+
+        msg.markers.push_back(line_strip);
+
+        // Add smaller waypoint markers for each candidate path
+        int point_id = 0;
+        for (const auto& frenet_point : path.points)
+        {
+            if (frenet_point.waypoint_index >= all_waypoints_from_global_planner_.size()) continue;
+            
+            const auto& wp = all_waypoints_from_global_planner_[frenet_point.waypoint_index];
+
+            visualization_msgs::msg::Marker waypoint_marker;
+            waypoint_marker.header.frame_id = "map";
+            waypoint_marker.header.stamp = this->now();
+            waypoint_marker.ns = "frenet_candidate_paths";
+            waypoint_marker.id = path_id * 1000 + point_id + 1; // Unique ID
+            waypoint_marker.type = visualization_msgs::msg::Marker::ARROW;
+            waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+
+            waypoint_marker.pose.position.x = wp.x;
+            waypoint_marker.pose.position.y = wp.y;
+            waypoint_marker.pose.position.z = 0.05;
+
+            tf2::Quaternion quaternion;
+            quaternion.setRPY(0, 0, wp.heading);
+            waypoint_marker.pose.orientation.x = quaternion.x();
+            waypoint_marker.pose.orientation.y = quaternion.y();
+            waypoint_marker.pose.orientation.z = quaternion.z();
+            waypoint_marker.pose.orientation.w = quaternion.w();
+
+            waypoint_marker.scale.x = 0.3; // Smaller arrows for candidates
+            waypoint_marker.scale.y = 0.08;
+            waypoint_marker.scale.z = 0.08;
+
+            waypoint_marker.color.a = 0.6; // Semi-transparent
+            // Same color as line strip
+            waypoint_marker.color.r = line_strip.color.r;
+            waypoint_marker.color.g = line_strip.color.g;
+            waypoint_marker.color.b = line_strip.color.b;
+
+            msg.markers.push_back(waypoint_marker);
+            point_id++;
+        }
+
+        // Add text marker showing path info (priority and average cost)
+        if (!path.points.empty())
+        {
+            const auto& first_point = path.points.front();
+            if (first_point.waypoint_index < all_waypoints_from_global_planner_.size())
+            {
+                const auto& wp = all_waypoints_from_global_planner_[first_point.waypoint_index];
+                
+                visualization_msgs::msg::Marker text_marker;
+                text_marker.header.frame_id = "map";
+                text_marker.header.stamp = this->now();
+                text_marker.ns = "frenet_candidate_paths";
+                text_marker.id = path_id * 1000 + 500; // Text marker ID
+                text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+                text_marker.action = visualization_msgs::msg::Marker::ADD;
+
+                text_marker.pose.position.x = wp.x;
+                text_marker.pose.position.y = wp.y - 1.0; // Offset to the side
+                text_marker.pose.position.z = 0.8; // Above the waypoints
+
+                text_marker.scale.z = 0.4; // Text size
+                text_marker.color.a = 1.0;
+                text_marker.color.r = 1.0;
+                text_marker.color.g = 1.0;
+                text_marker.color.b = 0.0; // Yellow text
+
+                // Format: Priority X, Cost: X.XX, Points: XX
+                std::ostringstream text_stream;
+                text_stream << std::fixed << std::setprecision(2);
+                text_stream << "P" << path.priority << "\n";
+                text_stream << "C:" << path.total_cost << "\n";
+                text_stream << "N:" << path.points.size();
+                text_marker.text = text_stream.str();
+
+                msg.markers.push_back(text_marker);
+            }
+        }
+
+        path_id++;
+    }
+
+    frenet_candidate_paths_publisher_->publish(msg);
 }
 
 
