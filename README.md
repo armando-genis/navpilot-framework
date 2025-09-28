@@ -152,3 +152,19 @@ ros2 launch /workspace/navpilot_ws/src/path_planning/launch/localization.launch.
 ros2 launch /workspace/navpilot_ws/src/hdmap_stack/launch/map.launch.py
 
 ros2 launch path_planning_dynamic planning.launch.py
+
+<!-- run test -->
+
+ros2 launch /workspace/navpilot_ws/src/hdmap_stack/launch/map.launch.py
+
+ros2 bag play /workspace/navpilot_ws/src/mcap_reader/output_callejon_filtered.mcap --clock
+
+python3 /workspace/navpilot_ws/src/path_planning/robot_move_test.py
+
+ros2 launch path_planning_dynamic planning.launch.py
+
+rviz2
+
+problem for the future
+
+if the map is bigger when gettin the path and the nehibours the waypoints vector will be larger and the fucntion compute_closest_waypoint will not work because it only compute in windows of 100 waypoints. so before in the global planner will be good to ordonate the waypoints based on distances and then store them.

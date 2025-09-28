@@ -25,7 +25,7 @@ using namespace lanelet;
 using namespace std;
 
 struct point_struct { double x, y, heading; 
-                    int priority;};
+                    int priority, lanelet_id;};
 
 class GlobalPlanner
 {

@@ -78,7 +78,9 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
     
     // Clear previous neighbor waypoints
     neighbor_points_.clear();
-    
+
+
+    int lanelet_id = 0;
     // First, add waypoints from the main routing path
     for (const auto &path_lanelet : shortestPath)
     {
@@ -86,7 +88,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
             continue;
             
         processed_lanelets.insert(path_lanelet.id());
-        
+        lanelet_id = path_lanelet.id();
         // Generate waypoints for the main path lanelet
         auto points = path_lanelet.centerline3d();
         
@@ -162,6 +164,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
             waypoint_data.y = point.y();
             waypoint_data.heading = yaw;
             waypoint_data.priority = 1; // Blue path priority
+            waypoint_data.lanelet_id = lanelet_id;
             main_path_points.push_back(waypoint_data);
 
         }
@@ -169,7 +172,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
         neighbor_points_.push_back(main_path_points);
     }
 
-    
+    lanelet_id = 0;
     // Then, add waypoints from neighboring and reachable lanelets
     for (const auto &path_lanelet : shortestPath)
     {
@@ -184,7 +187,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 continue;
                 
             processed_lanelets.insert(lanelet.id());
-            
+            lanelet_id = lanelet.id();
             auto points = lanelet.centerline3d();
             
             if (points.empty())
@@ -259,6 +262,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.y = point.y();
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 2; // Orange path priority
+                waypoint_data.lanelet_id = lanelet_id;
                 neighbor_lanelet_points.push_back(waypoint_data);
             }
 
@@ -267,7 +271,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
     }
 
     // std::cout << blue << "Finding lanelets that branch off through curves..." << reset << std::endl;
-    
+    lanelet_id = 0;
     for (const auto &path_lanelet : shortestPath)
     {
         // Get lanelets that follow this path lanelet (branches, curves, etc.)
@@ -331,11 +335,14 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
             
             // Always add the first point
             waypoints.push_back(points[0]);
+
+            lanelet_id = following_lanelet.id();
             
             // Calculate cumulative distance and add waypoints at intervals
             double cumulative_distance = 0.0;
             lanelet::ConstPoint3d last_waypoint = points[0];
             
+
             for (size_t i = 1; i < points.size(); ++i)
             {
                 const auto &current_point = points[i];
@@ -395,6 +402,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.y = point.y();
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 3; // Purple path priority
+                waypoint_data.lanelet_id = lanelet_id;
                 branching_lanelet_points.push_back(waypoint_data);
             }
 
@@ -403,7 +411,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
     }
     
     // std::cout << blue << "Finding lanelets connected through adjacency..." << reset << std::endl;
-    
+    lanelet_id = 0;
     for (const auto &path_lanelet : shortestPath)
     {
         // Try to find lanelets that are adjacent to this path lanelet
@@ -469,7 +477,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
             
             // Always add the first point
             waypoints.push_back(points[0]);
-            
+            lanelet_id = adjacent_lanelet.id();
             // Calculate cumulative distance and add waypoints at intervals
             double cumulative_distance = 0.0;
             lanelet::ConstPoint3d last_waypoint = points[0];
@@ -533,6 +541,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.y = point.y();
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 4; // Purple path priority
+                waypoint_data.lanelet_id = lanelet_id;
                 adjacent_lanelet_points.push_back(waypoint_data);
             }
 

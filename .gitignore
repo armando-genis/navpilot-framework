@@ -30,3 +30,8 @@ workspace/oms/floor_low_density.pcd
 workspace/oms/rosbag2_2025_09_01-01_47_35/
 
 workspace/navpilot_ws/rosbag2_2025_09_01-01_47_35/
+workspace/frenet/
+workspace/Optimal-Trajectory-Generation-in-Frenet-Frame/
+
+/workspace/navpilot_ws/src/mcap_reader/output_callejon_filtered.mcap/
+
