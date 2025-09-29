@@ -62,6 +62,12 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
 
     planner_waypoint_polygons_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/planner_waypoint_vehicle_polygons", 10);
+    
+    // Continuous planning publishers
+    planned_trajectories_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/planned_trajectories", 10);
+    optimal_trajectory_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/optimal_trajectory", 10);
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -96,10 +102,14 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     precomputeCommandSamples();
     all_waypoints_from_global_planner_ = global_planner_->getAllAllWaypointsStruct();
     publishGlobalPlanner();
+    
+    // Start continuous planning
+    startContinuousPlanning();
 }
 
 path_planning::~path_planning()
 {
+    stopContinuousPlanning();
 }
 
 // =============================
@@ -1283,6 +1293,504 @@ void path_planning::publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, 
     {
         real_trajectories_pub_2->publish(msg);
     }
+}
+
+// =============================
+// Continuous Planning System
+// =============================
+
+void path_planning::startContinuousPlanning()
+{
+    if (continuous_planning_active_) {
+        std::cout << yellow << "Continuous planning already active" << reset << std::endl;
+        return;
+    }
+    
+    continuous_planning_active_ = true;
+    planning_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(static_cast<int>(1000.0 / planning_frequency_)),
+        std::bind(&path_planning::continuousPlanningCallback, this)
+    );
+    
+    std::cout << green << "Continuous planning started at " << planning_frequency_ << " Hz" << reset << std::endl;
+}
+
+void path_planning::stopContinuousPlanning()
+{
+    if (!continuous_planning_active_) {
+        return;
+    }
+    
+    continuous_planning_active_ = false;
+    if (planning_timer_) {
+        planning_timer_->cancel();
+        planning_timer_.reset();
+    }
+    
+    std::cout << red << "Continuous planning stopped" << reset << std::endl;
+}
+
+void path_planning::continuousPlanningCallback()
+{
+    // Update current robot state from TF (real odometry)
+    getCurrentRobotState();
+    
+    // Generate multiple full trajectory options
+    std::vector<std::vector<State>> all_trajectories = generateMultipleFullTrajectories(*car_state_);
+    
+    if (all_trajectories.empty()) {
+        std::cout << red << "No valid trajectories generated" << reset << std::endl;
+        return;
+    }
+    
+    // Select optimal trajectory
+    std::vector<State> optimal_trajectory = selectOptimalFullTrajectory(all_trajectories);
+    
+    // Visualize all trajectory options
+    publishAllTrajectoriesVisualization(all_trajectories);
+    
+    // Publish optimal trajectory visualization
+    publishTrajectoryVisualization(optimal_trajectory, "optimal_trajectory");
+    
+    std::cout << blue << "Continuous planning cycle completed - Robot at: (" 
+              << car_state_->x << ", " << car_state_->y << ", " << car_state_->heading << ")" << reset << std::endl;
+}
+
+std::vector<State> path_planning::generateTrajectory(const State& start_state, const State& target_state, double time_horizon)
+{
+    std::vector<State> trajectory;
+    
+    // Generate curved trajectory using polynomial interpolation (similar to Frenet frame)
+    int num_steps = static_cast<int>(time_horizon / trajectory_time_step_);
+    
+    // Calculate distance and direction
+    double dx = target_state.x - start_state.x;
+    double dy = target_state.y - start_state.y;
+    double distance = std::sqrt(dx*dx + dy*dy);
+    
+    // Initial and final velocities (similar to Frenet frame approach)
+    double initial_velocity = 2.0; // m/s
+    double final_velocity = 2.0;   // m/s
+    
+    // Calculate velocity components
+    double vx0 = initial_velocity * std::cos(start_state.heading);
+    double vy0 = initial_velocity * std::sin(start_state.heading);
+    double vxf = final_velocity * std::cos(target_state.heading);
+    double vyf = final_velocity * std::sin(target_state.heading);
+    
+    for (int i = 0; i <= num_steps; ++i) {
+        double t = static_cast<double>(i) / num_steps;
+        double T = time_horizon;
+        
+        State intermediate_state;
+        
+        // Use polynomial interpolation for smooth curves (similar to Frenet frame)
+        // Position: cubic polynomial with boundary conditions
+        double t2 = t * t;
+        double t3 = t2 * t;
+        
+        // Cubic polynomial coefficients for smooth trajectory
+        // P(t) = P0 + V0*t*T + (3*(Pf-P0)/T^2 - 2*V0/T - Vf/T)*t^2*T^2 + (2*(P0-Pf)/T^3 + (V0+Vf)/T^2)*t^3*T^3
+        
+        // X component
+        double a0_x = start_state.x;
+        double a1_x = vx0 * T;
+        double a2_x = 3.0 * (target_state.x - start_state.x) - 2.0 * vx0 * T - vxf * T;
+        double a3_x = 2.0 * (start_state.x - target_state.x) + (vx0 + vxf) * T;
+        
+        intermediate_state.x = a0_x + a1_x * t + a2_x * t2 + a3_x * t3;
+        
+        // Y component
+        double a0_y = start_state.y;
+        double a1_y = vy0 * T;
+        double a2_y = 3.0 * (target_state.y - start_state.y) - 2.0 * vy0 * T - vyf * T;
+        double a3_y = 2.0 * (start_state.y - target_state.y) + (vy0 + vyf) * T;
+        
+        intermediate_state.y = a0_y + a1_y * t + a2_y * t2 + a3_y * t3;
+        
+        // Calculate heading from velocity (derivative of position)
+        double vx = (a1_x + 2.0 * a2_x * t + 3.0 * a3_x * t2) / T;
+        double vy = (a1_y + 2.0 * a2_y * t + 3.0 * a3_y * t2) / T;
+        
+        if (std::abs(vx) > 0.01 || std::abs(vy) > 0.01) {
+            intermediate_state.heading = std::atan2(vy, vx);
+        } else {
+            intermediate_state.heading = (i == 0) ? start_state.heading : trajectory.back().heading;
+        }
+        
+        trajectory.push_back(intermediate_state);
+    }
+    
+    return trajectory;
+}
+
+std::vector<State> path_planning::generateMultipleTrajectories(const State& start_state)
+{
+    std::vector<State> trajectory_options;
+    
+    if (all_waypoints_from_global_planner_.empty()) {
+        std::cout << red << "No global waypoints available for trajectory generation" << reset << std::endl;
+        return trajectory_options;
+    }
+    
+    // Generate trajectories to different waypoints ahead of current position
+    int start_idx = std::max(0, static_cast<int>(closest_waypoint));
+    int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                          static_cast<int>(closest_waypoint + 10));
+    
+    for (int i = start_idx + 1; i <= end_idx; i += 2) { // Sample every 2nd waypoint
+        State target_state;
+        target_state.x = all_waypoints_from_global_planner_[i].x;
+        target_state.y = all_waypoints_from_global_planner_[i].y;
+        target_state.heading = all_waypoints_from_global_planner_[i].heading;
+        
+        // Generate trajectory to this target
+        std::vector<State> trajectory = generateTrajectory(start_state, target_state, max_trajectory_time_);
+        
+        if (!trajectory.empty()) {
+            trajectory_options.push_back(trajectory.back()); // Store the final state as option
+        }
+    }
+    
+    return trajectory_options;
+}
+
+std::vector<std::vector<State>> path_planning::generateMultipleFullTrajectories(const State& start_state)
+{
+    std::vector<std::vector<State>> all_trajectories;
+    
+    if (all_waypoints_from_global_planner_.empty()) {
+        std::cout << red << "No global waypoints available for trajectory generation" << reset << std::endl;
+        return all_trajectories;
+    }
+    
+    // Generate trajectories with different time horizons and lateral offsets (similar to Frenet frame)
+    std::vector<double> time_horizons = {1.0, 1.5, 2.0, 2.5, 3.0}; // Different prediction times
+    std::vector<double> lateral_offsets = {-1.5, -0.75, 0.0, 0.75, 1.5}; // Different lateral positions
+    
+    int start_idx = std::max(0, static_cast<int>(closest_waypoint));
+    int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                          static_cast<int>(closest_waypoint + 8));
+    
+    // Generate trajectories to different waypoints with various time horizons
+    for (double T : time_horizons) {
+        for (int i = start_idx + 1; i <= end_idx; i += 3) { // Sample every 3rd waypoint for variety
+            State base_target;
+            base_target.x = all_waypoints_from_global_planner_[i].x;
+            base_target.y = all_waypoints_from_global_planner_[i].y;
+            base_target.heading = all_waypoints_from_global_planner_[i].heading;
+            
+            // Create trajectory variations with lateral offsets
+            for (double offset : lateral_offsets) {
+                State target_state = base_target;
+                
+                // Apply lateral offset perpendicular to the waypoint heading
+                target_state.x += offset * std::sin(base_target.heading);
+                target_state.y -= offset * std::cos(base_target.heading);
+                
+                // Generate curved trajectory to this offset target
+                std::vector<State> trajectory = generateTrajectory(start_state, target_state, T);
+                
+                if (!trajectory.empty()) {
+                    all_trajectories.push_back(trajectory);
+                }
+            }
+        }
+    }
+    
+    // // Add some trajectories that follow the global path more closely
+    // for (int i = start_idx + 1; i <= std::min(start_idx + 5, static_cast<int>(all_waypoints_from_global_planner_.size() - 1)); i++) {
+    //     State target_state;
+    //     target_state.x = all_waypoints_from_global_planner_[i].x;
+    //     target_state.y = all_waypoints_from_global_planner_[i].y;
+    //     target_state.heading = all_waypoints_from_global_planner_[i].heading;
+        
+    //     // Generate trajectory that closely follows the global path
+    //     std::vector<State> trajectory = generateTrajectory(start_state, target_state, 2.0);
+        
+    //     if (!trajectory.empty()) {
+    //         all_trajectories.push_back(trajectory);
+    //     }
+    // }
+    
+    return all_trajectories;
+}
+
+std::vector<State> path_planning::selectOptimalFullTrajectory(const std::vector<std::vector<State>>& trajectories)
+{
+    if (trajectories.empty()) {
+        return std::vector<State>(); // Return empty trajectory if no options
+    }
+    
+    double best_cost = std::numeric_limits<double>::max();
+    std::vector<State> optimal_trajectory = trajectories[0];
+    
+    for (const auto& trajectory : trajectories) {
+        double cost = evaluateTrajectoryCost(trajectory);
+        
+        if (cost < best_cost) {
+            best_cost = cost;
+            optimal_trajectory = trajectory;
+        }
+    }
+    
+    std::cout << green << "Selected optimal full trajectory with cost: " << best_cost << reset << std::endl;
+    return optimal_trajectory;
+}
+
+void path_planning::publishAllTrajectoriesVisualization(const std::vector<std::vector<State>>& trajectories)
+{
+    visualization_msgs::msg::MarkerArray marker_array;
+    marker_array.markers.clear();
+    
+    for (size_t traj_idx = 0; traj_idx < trajectories.size(); ++traj_idx) {
+        const auto& trajectory = trajectories[traj_idx];
+        
+        // Create line strip marker for each trajectory path
+        visualization_msgs::msg::Marker line_marker;
+        line_marker.header.frame_id = "map";
+        line_marker.header.stamp = this->now();
+        line_marker.ns = "planned_trajectories";
+        line_marker.id = static_cast<int>(traj_idx);
+        line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        // Add points to the line strip
+        for (size_t i = 0; i < trajectory.size(); ++i) {
+            geometry_msgs::msg::Point point;
+            point.x = trajectory[i].x;
+            point.y = trajectory[i].y;
+            point.z = 0.05; // Slightly lower than optimal trajectory
+            line_marker.points.push_back(point);
+        }
+        
+        // Set line properties
+        line_marker.scale.x = 0.05; // Thinner lines for planned options
+        line_marker.color.r = 0.0; // Blue for planned options
+        line_marker.color.g = 0.0;
+        line_marker.color.b = 1.0;
+        line_marker.color.a = 0.6; // More transparent
+        
+        marker_array.markers.push_back(line_marker);
+    }
+    
+    planned_trajectories_publisher_->publish(marker_array);
+}
+
+State path_planning::selectOptimalTrajectory(const std::vector<State>& trajectories)
+{
+    if (trajectories.empty()) {
+        return *car_state_; // Return current state if no options
+    }
+    
+    double best_cost = std::numeric_limits<double>::max();
+    State optimal_state = trajectories[0];
+    
+    for (const auto& trajectory_end : trajectories) {
+        // Create a simple trajectory from current state to trajectory end
+        std::vector<State> trajectory = generateTrajectory(*car_state_, trajectory_end, max_trajectory_time_);
+        double cost = evaluateTrajectoryCost(trajectory);
+        
+        if (cost < best_cost) {
+            best_cost = cost;
+            optimal_state = trajectory_end;
+        }
+    }
+    
+    std::cout << green << "Selected optimal trajectory with cost: " << best_cost << reset << std::endl;
+    return optimal_state;
+}
+
+
+void path_planning::publishTrajectoryVisualization(const std::vector<State>& trajectory, const std::string& namespace_name)
+{
+    visualization_msgs::msg::MarkerArray marker_array;
+    marker_array.markers.clear();
+    
+    // Create line strip marker for trajectory path
+    visualization_msgs::msg::Marker line_marker;
+    line_marker.header.frame_id = "map";
+    line_marker.header.stamp = this->now();
+    line_marker.ns = namespace_name;
+    line_marker.id = 0;
+    line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_marker.action = visualization_msgs::msg::Marker::ADD;
+    
+    // Add points to the line strip
+    for (size_t i = 0; i < trajectory.size(); ++i) {
+        geometry_msgs::msg::Point point;
+        point.x = trajectory[i].x;
+        point.y = trajectory[i].y;
+        point.z = 0.1;
+        line_marker.points.push_back(point);
+    }
+    
+    // Set line properties
+    line_marker.scale.x = 0.1; // Line width
+    line_marker.color.a = 0.8;
+    
+    // Color based on namespace
+    if (namespace_name == "optimal_trajectory") {
+        line_marker.color.r = 1.0; // Red for optimal
+        line_marker.color.g = 0.0;
+        line_marker.color.b = 0.0;
+    } else {
+        line_marker.color.r = 0.0; // Blue for planned options
+        line_marker.color.g = 0.0;
+        line_marker.color.b = 1.0;
+    }
+    
+    marker_array.markers.push_back(line_marker);
+    
+    // Add start point marker
+    if (!trajectory.empty()) {
+        visualization_msgs::msg::Marker start_marker;
+        start_marker.header.frame_id = "map";
+        start_marker.header.stamp = this->now();
+        start_marker.ns = namespace_name + "_start";
+        start_marker.id = 0;
+        start_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        start_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        start_marker.pose.position.x = trajectory[0].x;
+        start_marker.pose.position.y = trajectory[0].y;
+        start_marker.pose.position.z = 0.2;
+        
+        start_marker.scale.x = 0.3;
+        start_marker.scale.y = 0.3;
+        start_marker.scale.z = 0.3;
+        
+        start_marker.color.r = 0.0; // Green for start
+        start_marker.color.g = 1.0;
+        start_marker.color.b = 0.0;
+        start_marker.color.a = 1.0;
+        
+        marker_array.markers.push_back(start_marker);
+    }
+    
+    // Add end point marker
+    if (trajectory.size() > 1) {
+        visualization_msgs::msg::Marker end_marker;
+        end_marker.header.frame_id = "map";
+        end_marker.header.stamp = this->now();
+        end_marker.ns = namespace_name + "_end";
+        end_marker.id = 0;
+        end_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        end_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        end_marker.pose.position.x = trajectory.back().x;
+        end_marker.pose.position.y = trajectory.back().y;
+        end_marker.pose.position.z = 0.2;
+        
+        end_marker.scale.x = 0.3;
+        end_marker.scale.y = 0.3;
+        end_marker.scale.z = 0.3;
+        
+        if (namespace_name == "optimal_trajectory") {
+            end_marker.color.r = 1.0; // Red for optimal end
+            end_marker.color.g = 0.0;
+            end_marker.color.b = 0.0;
+        } else {
+            end_marker.color.r = 0.0; // Blue for planned end
+            end_marker.color.g = 0.0;
+            end_marker.color.b = 1.0;
+        }
+        end_marker.color.a = 1.0;
+        
+        marker_array.markers.push_back(end_marker);
+    }
+    
+    // Publish based on namespace
+    if (namespace_name == "optimal_trajectory") {
+        optimal_trajectory_publisher_->publish(marker_array);
+    } else {
+        planned_trajectories_publisher_->publish(marker_array);
+    }
+}
+
+double path_planning::evaluateTrajectoryCost(const std::vector<State>& trajectory)
+{
+    if (trajectory.size() < 2) {
+        return std::numeric_limits<double>::max();
+    }
+    
+    double total_cost = 0.0;
+    
+    // Distance cost (prefer shorter paths) - similar to Frenet frame
+    double path_length = 0.0;
+    for (size_t i = 1; i < trajectory.size(); ++i) {
+        double dx = trajectory[i].x - trajectory[i-1].x;
+        double dy = trajectory[i].y - trajectory[i-1].y;
+        path_length += std::sqrt(dx*dx + dy*dy);
+    }
+    total_cost += path_length * 0.1; // Distance weight
+    
+    // Smoothness cost (prefer smoother paths) - jerk minimization like Frenet
+    double jerk_cost = 0.0;
+    for (size_t i = 2; i < trajectory.size() - 1; ++i) {
+        double curvature_change = std::abs(trajectory[i+1].heading - 2*trajectory[i].heading + trajectory[i-1].heading);
+        jerk_cost += curvature_change * curvature_change;
+    }
+    total_cost += jerk_cost * 1.0; // Jerk weight
+    
+    // Velocity consistency cost
+    double velocity_cost = 0.0;
+    for (size_t i = 1; i < trajectory.size(); ++i) {
+        double dx = trajectory[i].x - trajectory[i-1].x;
+        double dy = trajectory[i].y - trajectory[i-1].y;
+        double velocity = std::sqrt(dx*dx + dy*dy) / trajectory_time_step_;
+        
+        // Penalize velocities outside desired range
+        if (velocity > max_velocity_) {
+            velocity_cost += (velocity - max_velocity_) * (velocity - max_velocity_);
+        }
+        if (velocity < 0.5) { // Minimum velocity
+            velocity_cost += (0.5 - velocity) * (0.5 - velocity);
+        }
+    }
+    total_cost += velocity_cost * 0.5; // Velocity weight
+    
+    // Goal alignment cost (prefer paths toward global waypoints)
+    if (!all_waypoints_from_global_planner_.empty()) {
+        // Find the best alignment with future waypoints
+        double min_alignment_cost = std::numeric_limits<double>::max();
+        
+        int start_check = std::max(0, static_cast<int>(closest_waypoint));
+        int end_check = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                               static_cast<int>(closest_waypoint + 5));
+        
+        for (int i = start_check; i <= end_check; ++i) {
+            double dx = trajectory.back().x - all_waypoints_from_global_planner_[i].x;
+            double dy = trajectory.back().y - all_waypoints_from_global_planner_[i].y;
+            double alignment_cost = std::sqrt(dx*dx + dy*dy);
+            min_alignment_cost = std::min(min_alignment_cost, alignment_cost);
+        }
+        
+        total_cost += min_alignment_cost * 2.0; // Goal alignment weight
+    }
+    
+    // Lane keeping cost (prefer staying close to global path)
+    double lane_deviation_cost = 0.0;
+    for (const auto& state : trajectory) {
+        double min_distance_to_path = std::numeric_limits<double>::max();
+        
+        // Check distance to nearby waypoints
+        int start_check = std::max(0, static_cast<int>(closest_waypoint) - 2);
+        int end_check = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                               static_cast<int>(closest_waypoint + 10));
+        
+        for (int i = start_check; i <= end_check; ++i) {
+            double dx = state.x - all_waypoints_from_global_planner_[i].x;
+            double dy = state.y - all_waypoints_from_global_planner_[i].y;
+            double distance = std::sqrt(dx*dx + dy*dy);
+            min_distance_to_path = std::min(min_distance_to_path, distance);
+        }
+        
+        lane_deviation_cost += min_distance_to_path;
+    }
+    total_cost += lane_deviation_cost * 0.3; // Lane keeping weight
+    
+    return total_cost;
 }
 
 

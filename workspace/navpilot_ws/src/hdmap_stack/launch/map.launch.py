@@ -49,18 +49,18 @@ def generate_launch_description():
     )
 
     # occupancy grid
-    publisher_node_occupancy = launch_ros.actions.LifecycleNode(
-        package='map_visualizer',
-        namespace='',
-        executable='occupancy_pub',
-        name='occupancy_pub',
-        output='screen',
-        additional_env={'RCUTILS_CONSOLE_OUTPUT_FORMAT': "{message}"}
-    )
+    # publisher_node_occupancy = launch_ros.actions.LifecycleNode(
+    #     package='map_visualizer',
+    #     namespace='',
+    #     executable='occupancy_pub',
+    #     name='occupancy_pub',
+    #     output='screen',
+    #     additional_env={'RCUTILS_CONSOLE_OUTPUT_FORMAT': "{message}"}
+    # )
 
     ld.add_action(publisher_node_osm)
     ld.add_action(publisher_node_routing)
-    ld.add_action(publisher_node_occupancy)
+    # ld.add_action(publisher_node_occupancy)
 
     return ld
 

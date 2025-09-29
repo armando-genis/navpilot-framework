@@ -149,6 +149,22 @@ private:
     std::string purple = "\033[1;35m";
     std::string reset = "\033[0m";
 
+    // Continuous planning parameters
+    double planning_frequency_ = 10.0;  // Hz
+    double trajectory_time_step_ = 0.1; // seconds
+    double max_trajectory_time_ = 3.0;  // seconds
+    double target_velocity_ = 5.0;      // m/s
+    double max_velocity_ = 10.0;        // m/s
+    double max_acceleration_ = 2.0;     // m/s^2
+    double max_curvature_ = 0.3;        // 1/m
+    
+    // Planning state
+    bool continuous_planning_active_ = false;
+    rclcpp::TimerBase::SharedPtr planning_timer_;
+    std::vector<State> current_trajectory_;
+    State target_state_;
+    double trajectory_progress_ = 0.0;
+
     // tf2 buffer & listener
     tf2_ros::Buffer tf2_buffer;
     tf2_ros::TransformListener tf2_listener;
@@ -179,6 +195,19 @@ private:
     size_t closest_waypoint = 0;  // index of the closest waypoint to the car
     void compute_closest_waypoint();
     double getDistanceFromOdom(const point_struct& waypoint);
+    
+    // Continuous planning methods
+    void startContinuousPlanning();
+    void stopContinuousPlanning();
+    void continuousPlanningCallback();
+    std::vector<State> generateTrajectory(const State& start_state, const State& target_state, double time_horizon);
+    std::vector<State> generateMultipleTrajectories(const State& start_state);
+    std::vector<std::vector<State>> generateMultipleFullTrajectories(const State& start_state);
+    State selectOptimalTrajectory(const std::vector<State>& trajectories);
+    std::vector<State> selectOptimalFullTrajectory(const std::vector<std::vector<State>>& trajectories);
+    void publishTrajectoryVisualization(const std::vector<State>& trajectory, const std::string& namespace_name);
+    void publishAllTrajectoriesVisualization(const std::vector<std::vector<State>>& trajectories);
+    double evaluateTrajectoryCost(const std::vector<State>& trajectory);
 
     // =============================
     // global planner
@@ -281,6 +310,10 @@ private:
     std::vector<point_struct> planner_waypoints_available;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoints_available_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoint_polygons_publisher_;
+    
+    // Continuous planning publishers
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planned_trajectories_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr optimal_trajectory_publisher_;
 
     void publish_planner_waypoints_available();
     void publish_planner_waypoint_polygons();
