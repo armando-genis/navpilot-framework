@@ -157,6 +157,7 @@ private:
     double max_velocity_ = 10.0;        // m/s
     double max_acceleration_ = 2.0;     // m/s^2
     double max_curvature_ = 0.3;        // 1/m
+    int num_lateral_offsets_ = 0;       // Number of lateral offset trajectories (0 = only center path)
     
     // Planning state
     bool continuous_planning_active_ = false;
@@ -208,6 +209,7 @@ private:
     void publishTrajectoryVisualization(const std::vector<State>& trajectory, const std::string& namespace_name);
     void publishAllTrajectoriesVisualization(const std::vector<std::vector<State>>& trajectories);
     double evaluateTrajectoryCost(const std::vector<State>& trajectory);
+    std::vector<double> generateLateralOffsets();
 
     // =============================
     // global planner

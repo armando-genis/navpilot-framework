@@ -14,3 +14,4 @@ path_planning_node:
     end_lanelet_id: 31
     x_offset: 0.0
     y_offset: 25.0
+    num_lateral_offsets: 0

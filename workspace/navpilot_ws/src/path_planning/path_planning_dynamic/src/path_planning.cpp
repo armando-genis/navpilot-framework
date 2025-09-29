@@ -16,6 +16,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->declare_parameter<double>("y_offset", 0.0);
     this->declare_parameter<int>("start_lanelet_id", 0);
     this->declare_parameter<int>("end_lanelet_id", 0);
+    this->declare_parameter<int>("num_lateral_offsets", 0);
 
     this->get_parameter("maxSteerAngle", maxSteerAngle);
     this->get_parameter("wheelBase", wheelBase);
@@ -31,6 +32,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->get_parameter("y_offset", y_offset_);
     this->get_parameter("start_lanelet_id", start_lanelet_id_);
     this->get_parameter("end_lanelet_id", end_lanelet_id_);
+    this->get_parameter("num_lateral_offsets", num_lateral_offsets_);
 
     // subscription for ma comination btw the glonal ma and the obstacles information
     // occupancy_grid_complete_map_1 ->  map from occupancy_pub -> resolution 1.0
@@ -96,6 +98,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     RCLCPP_INFO(this->get_logger(), "\033[1;34my_offset: %f\033[0m", y_offset_);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mstart_lanelet_id: %d\033[0m", start_lanelet_id_);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mend_lanelet_id: %d\033[0m", end_lanelet_id_);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mnum_lateral_offsets: %d\033[0m", num_lateral_offsets_);
 
     // get the motion commans
     motionCommands();
@@ -1466,7 +1469,7 @@ std::vector<std::vector<State>> path_planning::generateMultipleFullTrajectories(
     
     // Generate trajectories with different time horizons and lateral offsets (similar to Frenet frame)
     std::vector<double> time_horizons = {1.0, 1.5, 2.0, 2.5, 3.0}; // Different prediction times
-    std::vector<double> lateral_offsets = {-1.5, -0.75, 0.0, 0.75, 1.5}; // Different lateral positions
+    std::vector<double> lateral_offsets = generateLateralOffsets(); // Configurable lateral positions
     
     int start_idx = std::max(0, static_cast<int>(closest_waypoint));
     int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
@@ -1498,20 +1501,20 @@ std::vector<std::vector<State>> path_planning::generateMultipleFullTrajectories(
         }
     }
     
-    // // Add some trajectories that follow the global path more closely
-    // for (int i = start_idx + 1; i <= std::min(start_idx + 5, static_cast<int>(all_waypoints_from_global_planner_.size() - 1)); i++) {
-    //     State target_state;
-    //     target_state.x = all_waypoints_from_global_planner_[i].x;
-    //     target_state.y = all_waypoints_from_global_planner_[i].y;
-    //     target_state.heading = all_waypoints_from_global_planner_[i].heading;
+    // Add some trajectories that follow the global path more closely
+    for (int i = start_idx + 1; i <= std::min(start_idx + 5, static_cast<int>(all_waypoints_from_global_planner_.size() - 1)); i++) {
+        State target_state;
+        target_state.x = all_waypoints_from_global_planner_[i].x;
+        target_state.y = all_waypoints_from_global_planner_[i].y;
+        target_state.heading = all_waypoints_from_global_planner_[i].heading;
         
-    //     // Generate trajectory that closely follows the global path
-    //     std::vector<State> trajectory = generateTrajectory(start_state, target_state, 2.0);
+        // Generate trajectory that closely follows the global path
+        std::vector<State> trajectory = generateTrajectory(start_state, target_state, 2.0);
         
-    //     if (!trajectory.empty()) {
-    //         all_trajectories.push_back(trajectory);
-    //     }
-    // }
+        if (!trajectory.empty()) {
+            all_trajectories.push_back(trajectory);
+        }
+    }
     
     return all_trajectories;
 }
@@ -1791,6 +1794,31 @@ double path_planning::evaluateTrajectoryCost(const std::vector<State>& trajector
     total_cost += lane_deviation_cost * 0.3; // Lane keeping weight
     
     return total_cost;
+}
+
+std::vector<double> path_planning::generateLateralOffsets()
+{
+    std::vector<double> lateral_offsets;
+    
+    if (num_lateral_offsets_ == 0) {
+        // Only center path
+        lateral_offsets.push_back(0.0);
+    } else {
+        // Generate symmetric offsets around center
+        double offset_step = 0.75; // 0.75m increments
+        
+        // Always include center
+        lateral_offsets.push_back(0.0);
+        
+        // Add symmetric left and right offsets
+        for (int i = 1; i <= num_lateral_offsets_; ++i) {
+            double offset = i * offset_step;
+            lateral_offsets.push_back(-offset); // Left (negative)
+            lateral_offsets.push_back(offset);  // Right (positive)
+        }
+    }
+    
+    return lateral_offsets;
 }
 
 
