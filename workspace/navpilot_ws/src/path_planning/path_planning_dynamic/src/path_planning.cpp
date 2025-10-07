@@ -157,26 +157,73 @@ void path_planning::compute_closest_waypoint()
         return;
     }
 
-    constexpr size_t first_wp = 0;
-    const size_t last_wp = all_waypoints_from_global_planner_.size() - 1;
-    constexpr int search_offset_back = 5;
-    constexpr int search_offset_forward = 15;
-
-    int search_start = std::max(static_cast<int>(closest_waypoint) - search_offset_back, static_cast<int>(first_wp));
-    int search_end = std::min(static_cast<int>(closest_waypoint) + search_offset_forward, static_cast<int>(last_wp));
-
+    const size_t total_waypoints = all_waypoints_from_global_planner_.size();
     double smallest_curr_distance = std::numeric_limits<double>::max();
+    size_t new_closest_waypoint = closest_waypoint;
 
+    // Optimization: Use hybrid search strategy
+    // 1. First, search locally around the previous closest waypoint (fast path)
+    // 2. Then, search all waypoints within a distance threshold (spatial filtering)
+    // This handles both incremental movement and path switches efficiently
+    
+    constexpr int local_search_window = 30; // Increased window for local search
+    constexpr double spatial_search_radius = 10.0; // meters - only check waypoints within this radius
+    
+    // Step 1: Local search around previous closest waypoint
+    int search_start = std::max(0, static_cast<int>(closest_waypoint) - local_search_window);
+    int search_end = std::min(static_cast<int>(total_waypoints) - 1, 
+                             static_cast<int>(closest_waypoint) + local_search_window);
+    
     for (int i = search_start; i <= search_end; i++)
     {
         double curr_distance = getDistanceFromOdom(all_waypoints_from_global_planner_[i]);
-        if (smallest_curr_distance > curr_distance)
+        if (curr_distance < smallest_curr_distance)
         {
-            closest_waypoint = i;
+            new_closest_waypoint = i;
             smallest_curr_distance = curr_distance;
         }
     }
-    std::cout << green << "Closest waypoint: " << closest_waypoint << reset << std::endl;
+    
+    // Step 2: Spatial search - check waypoints that are spatially close but might be far in the array
+    // This is crucial for handling neighbor paths that are stored separately in the array
+    // We use a coarse distance check first to avoid expensive exact distance calculations
+    const double car_x = car_state_->x;
+    const double car_y = car_state_->y;
+    
+    for (size_t i = 0; i < total_waypoints; i++)
+    {
+        // Skip if already checked in local search
+        if (i >= static_cast<size_t>(search_start) && i <= static_cast<size_t>(search_end))
+            continue;
+        
+        // Coarse distance check using Manhattan distance (faster than Euclidean)
+        const double dx = std::abs(all_waypoints_from_global_planner_[i].x - car_x);
+        const double dy = std::abs(all_waypoints_from_global_planner_[i].y - car_y);
+        
+        // Quick rejection: if Manhattan distance > radius * 1.5, skip
+        if (dx + dy > spatial_search_radius * 1.5)
+            continue;
+        
+        // Fine distance check for candidates
+        double curr_distance = getDistanceFromOdom(all_waypoints_from_global_planner_[i]);
+        
+        // Only consider if within spatial radius
+        if (curr_distance < spatial_search_radius && curr_distance < smallest_curr_distance)
+        {
+            new_closest_waypoint = i;
+            smallest_curr_distance = curr_distance;
+        }
+    }
+    
+    // Update closest waypoint
+    closest_waypoint = new_closest_waypoint;
+    
+    // Log which lanelet the closest waypoint belongs to
+    // int current_lanelet_id = all_waypoints_from_global_planner_[closest_waypoint].lanelet_id;
+    // std::cout << green << "Closest waypoint: " << closest_waypoint 
+    //           << " (lanelet_id: " << current_lanelet_id 
+    //           << ", distance: " << smallest_curr_distance << " m)" << reset << std::endl;
+    
     publish_closest_waypoint_marker();
 }
 
@@ -276,7 +323,7 @@ void path_planning::publishGlobalPlanner()
                         waypoint_marker.color.g = 0.4;
                         waypoint_marker.color.b = 0.8;
                         break;
-                    case 7: // Brown
+                    case 7: // 617T2REW4E GQSMIBYA5QRCBH,X
                         waypoint_marker.color.r = 0.5;
                         waypoint_marker.color.g = 0.25;
                         waypoint_marker.color.b = 0.0;
@@ -296,7 +343,7 @@ void path_planning::publishGlobalPlanner()
 
             waypoint_marker.pose.position.x = all_waypoints_from_global_planner_[i].x;
             waypoint_marker.pose.position.y = all_waypoints_from_global_planner_[i].y;
-            waypoint_marker.pose.position.z = 0.0;
+            waypoint_marker.pose.position.z = -1.0;
 
             tf2::Quaternion quaternion;
             quaternion.setRPY(0, 0, all_waypoints_from_global_planner_[i].heading);
@@ -323,7 +370,7 @@ void path_planning::publishGlobalPlanner()
         // Position the text slightly above the arrow
         text_marker.pose.position.x = all_waypoints_from_global_planner_[i].x;
         text_marker.pose.position.y = all_waypoints_from_global_planner_[i].y;
-        text_marker.pose.position.z = 0.5; // Higher than the arrow
+        text_marker.pose.position.z = -0.5; // Higher than the arrow
         
         // Set text content to the lanelet ID
         text_marker.text = std::to_string(lanelet_id);
@@ -1473,7 +1520,7 @@ std::vector<std::vector<State>> path_planning::generateMultipleFullTrajectories(
     
     int start_idx = std::max(0, static_cast<int>(closest_waypoint));
     int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
-                          static_cast<int>(closest_waypoint + 8));
+                          static_cast<int>(closest_waypoint + 15));
     
     // Generate trajectories to different waypoints with various time horizons
     for (double T : time_horizons) {
