@@ -313,12 +313,26 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoints_available_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoint_polygons_publisher_;
     
+    // Frenet frame joined paths storage
+    std::vector<point_struct> longitudinal_path_;
+    std::vector<std::vector<point_struct>> lateral_paths_;
+    
     // Continuous planning publishers
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planned_trajectories_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr optimal_trajectory_publisher_;
+    
+    // Path joins publisher for Frenet frame trajectories
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr path_joins_publisher_;
 
     void publish_planner_waypoints_available();
     void publish_planner_waypoint_polygons();
+    
+    // Frenet frame path joining methods
+    void createJoinedPaths();
+    void publishJoinedPaths();
+    std::vector<std::vector<point_struct>> groupWaypointsByLanelet();
+    std::vector<point_struct> createLongitudinalPath();
+    std::vector<std::vector<point_struct>> createLateralPaths();
 
 
 

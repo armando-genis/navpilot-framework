@@ -23,7 +23,7 @@ class MovingTF(Node):
         # Parameters (radians; identity orientation by default)
         self.declare_parameter('parent_frame', 'map')
         self.declare_parameter('child_frame',  'velodyne')
-        self.declare_parameter('start_xyz',    [0.0, -4.0, 2.1])       # x,y,z
+        self.declare_parameter('start_xyz',    [0.0, 0.0, 2.1])       # x,y,z
         self.declare_parameter('start_rpy',    [0.0, 0.0, 0.0])       # roll,pitch,yaw (rad)
         self.declare_parameter('use_identity_orientation', True)      # force same rotation as parent
         self.declare_parameter('axis',         'x')                   # 'x'|'y'|'z'

@@ -70,6 +70,10 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
         "/planned_trajectories", 10);
     optimal_trajectory_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/optimal_trajectory", 10);
+    
+    // Path joins publisher for Frenet frame trajectories
+    path_joins_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/path_joins", 10);
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -747,10 +751,10 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
         occupancy_grid_pub_test_->publish(*rescaled_chunk_);
     }
 
-    TreeFlat_global_planner flat_global_planner;
-    int best_global = generateTajectoyTree_from_global_planer(current_node->Current_state, flat_global_planner);
-    publish_planner_waypoints_available();
-    publish_planner_waypoint_polygons();
+    // TreeFlat_global_planner flat_global_planner;
+    // int best_global = generateTajectoyTree_from_global_planer(current_node->Current_state, flat_global_planner);
+    // publish_planner_waypoints_available();
+    // publish_planner_waypoint_polygons();
 
     TreeFlat flat;
     int best = generateTrajectoryTree_AStar_flat_map(current_node->Current_state, flat);
@@ -1402,6 +1406,10 @@ void path_planning::continuousPlanningCallback()
     // Publish optimal trajectory visualization
     publishTrajectoryVisualization(optimal_trajectory, "optimal_trajectory");
     
+    // Create and publish Frenet frame joined paths
+    createJoinedPaths();
+    publishJoinedPaths();
+    
     std::cout << blue << "Continuous planning cycle completed - Robot at: (" 
               << car_state_->x << ", " << car_state_->y << ", " << car_state_->heading << ")" << reset << std::endl;
 }
@@ -1520,7 +1528,7 @@ std::vector<std::vector<State>> path_planning::generateMultipleFullTrajectories(
     
     int start_idx = std::max(0, static_cast<int>(closest_waypoint));
     int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
-                          static_cast<int>(closest_waypoint + 15));
+                          static_cast<int>(closest_waypoint + 20));
     
     // Generate trajectories to different waypoints with various time horizons
     for (double T : time_horizons) {
@@ -1866,6 +1874,410 @@ std::vector<double> path_planning::generateLateralOffsets()
     }
     
     return lateral_offsets;
+}
+
+// =============================
+// Frenet Frame Path Joining Methods
+// =============================
+
+void path_planning::createJoinedPaths()
+{
+    if (all_waypoints_from_global_planner_.empty()) {
+        std::cout << red << "No global waypoints available for path joining" << reset << std::endl;
+        return;
+    }
+    
+    // Group waypoints by lanelet
+    std::vector<std::vector<point_struct>> lanelet_groups = groupWaypointsByLanelet();
+    
+    // Create longitudinal path (main path following)
+    longitudinal_path_ = createLongitudinalPath();
+    
+    // Create lateral paths (joining different lanelets)
+    lateral_paths_ = createLateralPaths();
+    
+    std::cout << green << "Created " << longitudinal_path_.size() << " longitudinal waypoints and " 
+              << lateral_paths_.size() << " lateral paths" << reset << std::endl;
+    
+    // Debug: Print lanelet transitions for longitudinal path
+    if (!longitudinal_path_.empty()) {
+        std::cout << blue << "Longitudinal path lanelet transitions: ";
+        int prev_lanelet = longitudinal_path_[0].lanelet_id;
+        std::cout << prev_lanelet;
+        for (size_t i = 1; i < longitudinal_path_.size(); i++) {
+            if (longitudinal_path_[i].lanelet_id != prev_lanelet) {
+                std::cout << " -> " << longitudinal_path_[i].lanelet_id;
+                prev_lanelet = longitudinal_path_[i].lanelet_id;
+            }
+        }
+        std::cout << reset << std::endl;
+    }
+    
+    // Debug: Print lanelet transitions for lateral paths
+    for (size_t i = 0; i < lateral_paths_.size(); ++i) {
+        if (!lateral_paths_[i].empty()) {
+            std::cout << blue << "Lateral path " << i << " lanelet transitions: ";
+            int prev_lanelet = lateral_paths_[i][0].lanelet_id;
+            std::cout << prev_lanelet;
+            for (size_t j = 1; j < lateral_paths_[i].size(); j++) {
+                if (lateral_paths_[i][j].lanelet_id != prev_lanelet) {
+                    std::cout << " -> " << lateral_paths_[i][j].lanelet_id;
+                    prev_lanelet = lateral_paths_[i][j].lanelet_id;
+                }
+            }
+            std::cout << reset << std::endl;
+        }
+    }
+}
+
+std::vector<std::vector<point_struct>> path_planning::groupWaypointsByLanelet()
+{
+    std::map<int, std::vector<point_struct>> lanelet_map;
+    
+    // Group waypoints by lanelet_id
+    for (const auto& waypoint : all_waypoints_from_global_planner_) {
+        lanelet_map[waypoint.lanelet_id].push_back(waypoint);
+    }
+    
+    // Convert map to vector of vectors
+    std::vector<std::vector<point_struct>> groups;
+    for (const auto& pair : lanelet_map) {
+        groups.push_back(pair.second);
+    }
+    
+    // Sort groups by lanelet_id for consistent ordering
+    std::sort(groups.begin(), groups.end(), [](const std::vector<point_struct>& a, const std::vector<point_struct>& b) {
+        return !a.empty() && !b.empty() && a[0].lanelet_id < b[0].lanelet_id;
+    });
+    
+    return groups;
+}
+
+std::vector<point_struct> path_planning::createLongitudinalPath()
+{
+    std::vector<point_struct> longitudinal_path;
+    
+    // Create a continuous longitudinal path that smoothly transitions between lanelets
+    int start_idx = std::max(0, static_cast<int>(closest_waypoint));
+    int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                          static_cast<int>(closest_waypoint + 25));
+    
+    // Strategy: Follow consecutive waypoints forward, allowing smooth lanelet transitions
+    // This creates a continuous path that follows the main route regardless of lanelet changes
+    
+    for (int i = start_idx; i <= end_idx; i++) {
+        const auto& waypoint = all_waypoints_from_global_planner_[i];
+        
+        // Always include the waypoint to maintain continuity
+        longitudinal_path.push_back(waypoint);
+        
+        // Optional: Add some filtering based on spatial continuity
+        if (longitudinal_path.size() > 1) {
+            const auto& last_waypoint = longitudinal_path[longitudinal_path.size() - 2];
+            double dx = waypoint.x - last_waypoint.x;
+            double dy = waypoint.y - last_waypoint.y;
+            double distance = std::sqrt(dx*dx + dy*dy);
+            
+            // If the distance is too large, it might be a disconnected waypoint
+            // Keep it anyway for now, but this could be used for filtering if needed
+            if (distance > 10.0) { // More than 10 meters apart
+                // Still keep it, but could add logic here if needed
+            }
+        }
+    }
+    
+    return longitudinal_path;
+}
+
+std::vector<std::vector<point_struct>> path_planning::createLateralPaths()
+{
+    std::vector<std::vector<point_struct>> lateral_paths;
+    
+    // Get unique lanelet IDs and their waypoints
+    std::map<int, std::vector<point_struct>> lanelet_map;
+    for (const auto& waypoint : all_waypoints_from_global_planner_) {
+        lanelet_map[waypoint.lanelet_id].push_back(waypoint);
+    }
+    
+    // Find the current lanelet based on closest waypoint
+    int current_lanelet_id = all_waypoints_from_global_planner_[closest_waypoint].lanelet_id;
+    
+    // Create continuous lateral paths for each different lanelet
+    for (const auto& lanelet_pair : lanelet_map) {
+        int target_lanelet_id = lanelet_pair.first;
+        if (target_lanelet_id == current_lanelet_id) continue; // Skip current lanelet
+        
+        std::vector<point_struct> lateral_path;
+        
+        // Strategy: Create a continuous path that includes waypoints from the target lanelet
+        // and connects them smoothly, even across lanelet boundaries
+        int start_idx = std::max(0, static_cast<int>(closest_waypoint));
+        int end_idx = std::min(static_cast<int>(all_waypoints_from_global_planner_.size() - 1), 
+                              static_cast<int>(closest_waypoint + 20));
+        
+        // First pass: Collect waypoints from the target lanelet
+        std::vector<point_struct> target_lanelet_waypoints;
+        for (int i = start_idx; i <= end_idx; i++) {
+            if (all_waypoints_from_global_planner_[i].lanelet_id == target_lanelet_id) {
+                target_lanelet_waypoints.push_back(all_waypoints_from_global_planner_[i]);
+            }
+        }
+        
+        // Second pass: Create continuous path by connecting target lanelet waypoints
+        // and filling gaps with spatially close waypoints from other lanelets
+        for (int i = start_idx; i <= end_idx; i++) {
+            const auto& waypoint = all_waypoints_from_global_planner_[i];
+            
+            // Always include waypoints from the target lanelet
+            if (waypoint.lanelet_id == target_lanelet_id) {
+                lateral_path.push_back(waypoint);
+            }
+            // Include waypoints from other lanelets if they help maintain continuity
+            else if (!lateral_path.empty()) {
+                const auto& last_waypoint = lateral_path.back();
+                double dx = waypoint.x - last_waypoint.x;
+                double dy = waypoint.y - last_waypoint.y;
+                double distance = std::sqrt(dx*dx + dy*dy);
+                
+                // If this waypoint is close to the last one and helps maintain continuity
+                if (distance < 3.0) { // Within 3 meters
+                    // Check if it's moving in a reasonable direction
+                    double forward_progress = (waypoint.x - last_waypoint.x) * std::cos(car_state_->heading) + 
+                                            (waypoint.y - last_waypoint.y) * std::sin(car_state_->heading);
+                    
+                    // Allow some backward movement for continuity, but prefer forward
+                    if (forward_progress > -1.0) { // Allow slight backward movement
+                        lateral_path.push_back(waypoint);
+                    }
+                }
+            }
+        }
+        
+        // If we still don't have enough waypoints, try spatial proximity approach
+        if (lateral_path.size() < 3) {
+            lateral_path.clear();
+            
+            // Find waypoints from target lanelet that are spatially close to longitudinal path
+            for (const auto& waypoint : lanelet_pair.second) {
+                bool is_close = false;
+                for (const auto& long_waypoint : longitudinal_path_) {
+                    double dx = waypoint.x - long_waypoint.x;
+                    double dy = waypoint.y - long_waypoint.y;
+                    double distance = std::sqrt(dx*dx + dy*dy);
+                    
+                    if (distance < 6.0) { // Within 6 meters
+                        is_close = true;
+                        break;
+                    }
+                }
+                
+                if (is_close) {
+                    lateral_path.push_back(waypoint);
+                }
+            }
+            
+            // Sort by distance from current position
+            std::sort(lateral_path.begin(), lateral_path.end(), 
+                      [this](const point_struct& a, const point_struct& b) {
+                          double dist_a = getDistanceFromOdom(a);
+                          double dist_b = getDistanceFromOdom(b);
+                          return dist_a < dist_b;
+                      });
+        }
+        
+        // Only add if we have at least 2 waypoints for a meaningful path
+        if (lateral_path.size() >= 2) {
+            lateral_paths.push_back(lateral_path);
+        }
+    }
+    
+    return lateral_paths;
+}
+
+void path_planning::publishJoinedPaths()
+{
+    if (path_joins_publisher_->get_subscription_count() == 0) {
+        return;
+    }
+    
+    visualization_msgs::msg::MarkerArray marker_array;
+    marker_array.markers.clear();
+    
+    // Clear previous markers
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = "map";
+    clear.header.stamp = this->now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear.ns = "path_joins";
+    marker_array.markers.push_back(clear);
+    
+    int marker_id = 0;
+    
+    // Publish longitudinal path (main path) - GREEN
+    if (!longitudinal_path_.empty()) {
+        visualization_msgs::msg::Marker longitudinal_marker;
+        longitudinal_marker.header.frame_id = "map";
+        longitudinal_marker.header.stamp = this->now();
+        longitudinal_marker.ns = "path_joins";
+        longitudinal_marker.id = marker_id++;
+        longitudinal_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        longitudinal_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        // Add points to the line strip
+        for (const auto& waypoint : longitudinal_path_) {
+            geometry_msgs::msg::Point point;
+            point.x = waypoint.x;
+            point.y = waypoint.y;
+            point.z = 0.1; // Slightly elevated
+            longitudinal_marker.points.push_back(point);
+        }
+        
+        // Set line properties - GREEN for longitudinal path
+        longitudinal_marker.scale.x = 0.15; // Thicker line for main path
+        longitudinal_marker.color.r = 0.0;
+        longitudinal_marker.color.g = 1.0;
+        longitudinal_marker.color.b = 0.0;
+        longitudinal_marker.color.a = 1.0;
+        
+        marker_array.markers.push_back(longitudinal_marker);
+    }
+    
+    // Publish lateral paths - Different colors for each path
+    std::vector<std::vector<double>> colors = {
+        {1.0, 0.0, 0.0}, // Red
+        {0.0, 0.0, 1.0}, // Blue
+        {1.0, 0.0, 1.0}, // Magenta
+        {0.0, 1.0, 1.0}, // Cyan
+        {1.0, 1.0, 0.0}, // Yellow
+        {1.0, 0.5, 0.0}, // Orange
+        {0.5, 0.0, 1.0}, // Purple
+        {1.0, 0.4, 0.8}  // Pink
+    };
+    
+    for (size_t i = 0; i < lateral_paths_.size(); ++i) {
+        const auto& lateral_path = lateral_paths_[i];
+        
+        visualization_msgs::msg::Marker lateral_marker;
+        lateral_marker.header.frame_id = "map";
+        lateral_marker.header.stamp = this->now();
+        lateral_marker.ns = "path_joins";
+        lateral_marker.id = marker_id++;
+        lateral_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        lateral_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        // Add points to the line strip
+        for (const auto& waypoint : lateral_path) {
+            geometry_msgs::msg::Point point;
+            point.x = waypoint.x;
+            point.y = waypoint.y;
+            point.z = 0.05; // Slightly lower than longitudinal path
+            lateral_marker.points.push_back(point);
+        }
+        
+        // Set line properties - Different color for each lateral path
+        lateral_marker.scale.x = 0.1; // Thinner lines for lateral paths
+        size_t color_idx = i % colors.size();
+        lateral_marker.color.r = colors[color_idx][0];
+        lateral_marker.color.g = colors[color_idx][1];
+        lateral_marker.color.b = colors[color_idx][2];
+        lateral_marker.color.a = 0.8;
+        
+        marker_array.markers.push_back(lateral_marker);
+        
+        // Add waypoint markers for lateral paths
+        for (size_t j = 0; j < lateral_path.size(); j += 3) { // Every 3rd waypoint
+            visualization_msgs::msg::Marker waypoint_marker;
+            waypoint_marker.header.frame_id = "map";
+            waypoint_marker.header.stamp = this->now();
+            waypoint_marker.ns = "path_joins_waypoints";
+            waypoint_marker.id = marker_id++;
+            waypoint_marker.type = visualization_msgs::msg::Marker::SPHERE;
+            waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+            
+            waypoint_marker.pose.position.x = lateral_path[j].x;
+            waypoint_marker.pose.position.y = lateral_path[j].y;
+            waypoint_marker.pose.position.z = 0.1;
+            
+            waypoint_marker.scale.x = 0.2;
+            waypoint_marker.scale.y = 0.2;
+            waypoint_marker.scale.z = 0.2;
+            
+            waypoint_marker.color.r = colors[color_idx][0];
+            waypoint_marker.color.g = colors[color_idx][1];
+            waypoint_marker.color.b = colors[color_idx][2];
+            waypoint_marker.color.a = 0.6;
+            
+            marker_array.markers.push_back(waypoint_marker);
+        }
+    }
+    
+    // Add waypoint markers for longitudinal path with lanelet transition indicators
+    int prev_lanelet_id = -1;
+    for (size_t i = 0; i < longitudinal_path_.size(); i += 2) { // Every 2nd waypoint
+        visualization_msgs::msg::Marker waypoint_marker;
+        waypoint_marker.header.frame_id = "map";
+        waypoint_marker.header.stamp = this->now();
+        waypoint_marker.ns = "path_joins_waypoints";
+        waypoint_marker.id = marker_id++;
+        waypoint_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
+        
+        waypoint_marker.pose.position.x = longitudinal_path_[i].x;
+        waypoint_marker.pose.position.y = longitudinal_path_[i].y;
+        waypoint_marker.pose.position.z = 0.15;
+        
+        waypoint_marker.scale.x = 0.25; // Larger for main path
+        waypoint_marker.scale.y = 0.25;
+        waypoint_marker.scale.z = 0.25;
+        
+        // Color based on lanelet transitions
+        if (longitudinal_path_[i].lanelet_id != prev_lanelet_id) {
+            // Lanelet transition - use brighter color
+            waypoint_marker.color.r = 0.0; // Green
+            waypoint_marker.color.g = 1.0;
+            waypoint_marker.color.b = 0.0;
+            waypoint_marker.scale.x = 0.35; // Even larger for transitions
+            waypoint_marker.scale.y = 0.35;
+            waypoint_marker.scale.z = 0.35;
+        } else {
+            // Same lanelet - use normal color
+            waypoint_marker.color.r = 0.0; // Green
+            waypoint_marker.color.g = 0.8;
+            waypoint_marker.color.b = 0.0;
+        }
+        waypoint_marker.color.a = 0.8;
+        
+        marker_array.markers.push_back(waypoint_marker);
+        prev_lanelet_id = longitudinal_path_[i].lanelet_id;
+        
+        // Add text marker for lanelet transitions
+        if (i == 0 || longitudinal_path_[i].lanelet_id != prev_lanelet_id) {
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header.frame_id = "map";
+            text_marker.header.stamp = this->now();
+            text_marker.ns = "path_joins_lanelet_labels";
+            text_marker.id = marker_id++;
+            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+            
+            text_marker.pose.position.x = longitudinal_path_[i].x;
+            text_marker.pose.position.y = longitudinal_path_[i].y;
+            text_marker.pose.position.z = 0.3;
+            
+            text_marker.text = "L" + std::to_string(longitudinal_path_[i].lanelet_id);
+            text_marker.scale.z = 0.2;
+            text_marker.color.r = 0.0;
+            text_marker.color.g = 1.0;
+            text_marker.color.b = 0.0;
+            text_marker.color.a = 1.0;
+            
+            marker_array.markers.push_back(text_marker);
+        }
+    }
+    
+    path_joins_publisher_->publish(marker_array);
+    
+    std::cout << blue << "Published " << marker_array.markers.size() << " path join markers" << reset << std::endl;
 }
 
 
