@@ -5,7 +5,6 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <geometry_msgs/msg/point.hpp>
-#include <geometry_msgs/msg/polygon.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <std_msgs/msg/int32.hpp>
@@ -30,9 +29,6 @@
 
 // tinyspline
 #include <tinysplinecxx.h>
-
-// STL containers
-#include <set>
 
 // STA collision checker
 #include "sat_collision_checker.h"
@@ -72,18 +68,6 @@ struct FlatNode {
 
 struct TreeFlat {
   std::vector<FlatNode> nodes;   // flat storage of all nodes
-  std::vector<int>      leaves;  // indices of leaf nodes in `nodes`
-};
-
-struct FlatNode_global_planner {
-  State state;          // last state of this segment
-  int   parent;         // index in `nodes` (-1 for root)
-  double cost;          // cumulative path cost (fill as you like)
-  int priority;         // priority of the waypoint
-};
-
-struct TreeFlat_global_planner {
-  std::vector<FlatNode_global_planner> nodes;   // flat storage of all nodes
   std::vector<int>      leaves;  // indices of leaf nodes in `nodes`
 };
 
@@ -149,23 +133,6 @@ private:
     std::string purple = "\033[1;35m";
     std::string reset = "\033[0m";
 
-    // Continuous planning parameters
-    double planning_frequency_ = 10.0;  // Hz
-    double trajectory_time_step_ = 0.1; // seconds
-    double max_trajectory_time_ = 3.0;  // seconds
-    double target_velocity_ = 5.0;      // m/s
-    double max_velocity_ = 10.0;        // m/s
-    double max_acceleration_ = 2.0;     // m/s^2
-    double max_curvature_ = 0.3;        // 1/m
-    int num_lateral_offsets_ = 0;       // Number of lateral offset trajectories (0 = only center path)
-    
-    // Planning state
-    bool continuous_planning_active_ = false;
-    rclcpp::TimerBase::SharedPtr planning_timer_;
-    std::vector<State> current_trajectory_;
-    State target_state_;
-    double trajectory_progress_ = 0.0;
-
     // tf2 buffer & listener
     tf2_ros::Buffer tf2_buffer;
     tf2_ros::TransformListener tf2_listener;
@@ -192,24 +159,6 @@ private:
 
     // function to get the state (position) of the car
     void getCurrentRobotState();
-    // function to get the closest waypoint to the car
-    size_t closest_waypoint = 0;  // index of the closest waypoint to the car
-    void compute_closest_waypoint();
-    double getDistanceFromOdom(const point_struct& waypoint);
-    
-    // Continuous planning methods
-    void startContinuousPlanning();
-    void stopContinuousPlanning();
-    void continuousPlanningCallback();
-    std::vector<State> generateTrajectory(const State& start_state, const State& target_state, double time_horizon);
-    std::vector<State> generateMultipleTrajectories(const State& start_state);
-    std::vector<std::vector<State>> generateMultipleFullTrajectories(const State& start_state);
-    State selectOptimalTrajectory(const std::vector<State>& trajectories);
-    std::vector<State> selectOptimalFullTrajectory(const std::vector<std::vector<State>>& trajectories);
-    void publishTrajectoryVisualization(const std::vector<State>& trajectory, const std::string& namespace_name);
-    void publishAllTrajectoriesVisualization(const std::vector<std::vector<State>>& trajectories);
-    double evaluateTrajectoryCost(const std::vector<State>& trajectory);
-    std::vector<double> generateLateralOffsets();
 
     // =============================
     // global planner
@@ -224,9 +173,7 @@ private:
     std::vector<point_struct> all_waypoints_from_global_planner_;  // waypoint with the central path and the neighbor lanelets
     visualization_msgs::msg::MarkerArray global_planner_markers_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_planner_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr closest_waypoint_marker_publisher_;
     void publishGlobalPlanner();
-    void publish_closest_waypoint_marker();
     // =============================
     // map combination and convine with the map obstacles
     // =============================
@@ -238,8 +185,7 @@ private:
     rclcpp::Subscription<obstacles_information_msgs::msg::ObstacleCollection>::SharedPtr obstacle_info_subscription_;
     void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
     // offset for the origin of the map chunk
-    double forward_distance = 10.0;
-    double forward_distance_square = 2.0; // this is for the white sqaure that ocloude the obstacles draw in the new map
+    double forward_distance = 7.0;
     int chunk_size = 100;
     int chunk_radius = chunk_size / 2;
     double scale_factor = 1; // if the map resolution is 1.0 is a scale factor of 5 and if the map resolution is 0.2 the salce resultion shoudl be 1.
@@ -266,74 +212,61 @@ private:
     int branching_factor;  // Number of paths per node (e.g., 5)
 
     // white square parameters
-    int square_size = 20; // Size of the square region in grid cells
+    int square_size = 15; // Size of the square region in grid cells (covers car + margin)
     int half_square = square_size / 2;
+    double forward_distance_square = 0.0; // this is for the white sqaure that ocloude the obstacles draw in the new map
+
 
     std::shared_ptr<planner::Node> current_node;
 
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_nodes_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr all_paths_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr sdv_trajectory_pub_;
 
     struct RelSample { double x, y, heading; };
     std::vector<std::vector<RelSample>> precomputed_rel_; // [cmd][step]
     void precomputeCommandSamples();
 
     // ---- scoring weights (tune as needed) ----
-    double W_FORWARD = 0.8;   // maximize forward progress
+    double W_FORWARD = 1.0;   // maximize forward progress
     double W_LAT     = 0.3;   // penalize lateral offset from current heading axis
-    double W_STEER   = 0.18;   // penalize steering effort (sum |steer| along chain)
-    double W_HEAD    = 0.25;   // penalize heading error vs current heading (or goal)
+    double W_STEER   = 0.1;   // penalize steering effort (sum |steer| along chain)
+    double W_HEAD    = 0.2;   // penalize heading error vs current heading (or goal)
 
     cv::Mat dist_m_; // distance matrix for the A* algorithm
 
     double SAFE_CLEAR = 0.8;    // meters: half vehicle width + margin
     double W_OBS      = 1.2;    // weight for clearance penalty
-    double W_DSTEER   = 0.12;   // weight for smoothness (|Δsteer|)
+    double W_DSTEER   = 0.05;   // weight for smoothness (|Δsteer|)
 
     // Build chain indices root->leaf
     inline void build_chain_indices(const TreeFlat& flat, int leaf_idx, std::vector<int>& chain) const;
 
     // publish the best path from the flat tree
     void publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, int color_idx);
+    void publishAllPathsFromFlat(const TreeFlat& flat);
+    void publishTrajectoryPath(const TreeFlat& flat, int leaf_idx);
 
     // generate the trajectory based on the flat tree on the A* algorithm
     int generateTrajectoryTree_AStar_flat_map(const State& root_state, TreeFlat& out);
+    int generateTrajectoryTree_AStar_flat_map_with_waypoints(const State& root_state, TreeFlat& out);
 
     void buildDistanceField();
     double clearanceMeters(int gx, int gy) const;
 
+    // --- waypoint attraction (priority-aware) ---
+    cv::Mat dist_wp1_m_;   // meters to priority-1 path
+    cv::Mat dist_wp2_m_;   // meters to priority-2 path
+    bool has_wp1_ = false;
+    bool has_wp2_ = false;
 
-    // =============================
-    // medium planner to get the path from the global planer
-    // =============================
+    double W_WP1 = 1.2;    // weight for distance to prio-1 path (balanced for straight/curved)
+    double W_WP2 = 0.6;    // weight for distance to prio-2 path (balanced for straight/curved)
+    double WP_STROKE_RADIUS_CELLS = 2.0; // thickness when rasterizing lines
 
-    int generateTajectoyTree_from_global_planer(const State& root_state, TreeFlat_global_planner& out);
-
-    std::vector<point_struct> planner_waypoints_available;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoints_available_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planner_waypoint_polygons_publisher_;
-    
-    // Frenet frame joined paths storage
-    std::vector<point_struct> longitudinal_path_;
-    std::vector<std::vector<point_struct>> lateral_paths_;
-    
-    // Continuous planning publishers
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr planned_trajectories_publisher_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr optimal_trajectory_publisher_;
-    
-    // Path joins publisher for Frenet frame trajectories
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr path_joins_publisher_;
-
-    void publish_planner_waypoints_available();
-    void publish_planner_waypoint_polygons();
-    
-    // Frenet frame path joining methods
-    void createJoinedPaths();
-    void publishJoinedPaths();
-    std::vector<std::vector<point_struct>> groupWaypointsByLanelet();
-    std::vector<point_struct> createLongitudinalPath();
-    std::vector<std::vector<point_struct>> createLateralPaths();
-
+    void buildWaypointDistanceFields();  // builds dist_wp1_m_ / dist_wp2_m_
 
 
 public:
@@ -342,4 +275,3 @@ public:
 };
 
 #endif
-

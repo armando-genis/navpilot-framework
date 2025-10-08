@@ -5,13 +5,13 @@ path_planning_node:
     axleToFront: 1.1
     axleToBack: 1.2
     width: 1.9
-    pathLength: 4
-    step_car: 0.3
-    tree_depth: 13
+    pathLength: 3
+    step_car: 0.2
+    tree_depth: 15
     branching_factor: 5
-    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"
-    start_lanelet_id: 3848
-    end_lanelet_id: 31
+    map_path: "/workspace/oms/me_4.osm"
+    start_lanelet_id: 206
+    end_lanelet_id: 295
     x_offset: 0.0
-    y_offset: 25.0
+    y_offset: 0.0
     num_lateral_offsets: 0

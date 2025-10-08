@@ -15,7 +15,7 @@ OsmVisualizer::OsmVisualizer() : Node("OsmVisualizer")
   this->declare_parameter("occupancy_output_topic", "occupancy_grid_complete_map");
 
   x_offset_ = 0.0;
-  y_offset_ = 25.0;
+  y_offset_ = 0.0;
   
   // Initialize occupancy grid parameters
   resolution_ = this->get_parameter("resolution").as_double();

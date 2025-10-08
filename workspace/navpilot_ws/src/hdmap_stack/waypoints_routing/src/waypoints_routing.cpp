@@ -12,7 +12,7 @@ waypoints_routing::waypoints_routing(/* args */) : Node("waypoints_routing_node"
         rclcpp::shutdown();
 
     x_offset_ = 0.0;
-    y_offset_ = 25.0;
+    y_offset_ = 0.0;
 
     waypoints_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/waypoints_routing", 10);
     full_graph_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/full_graph", 10);

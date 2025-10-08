@@ -11,33 +11,37 @@ class PathZShiftNode(Node):
     def __init__(self):
         super().__init__('path_z_shift')
 
-        # Parameter: how much to add to z (negative to reduce)
         self.z_offset = -2.2
+        self.num_last_poses = 300  # number of poses to keep from the end
 
-        # QoS: reliable + small queue (tweak if needed)
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
 
-        # Subscriber and Publisher
         self.sub = self.create_subscription(Path, '/path', self.on_path, qos)
-        self.pub = self.create_publisher(Path, '/path_zshifted', qos)
+        self.pub = self.create_publisher(Path, '/path_zshifted_and_quit', qos)
 
         self.get_logger().info(
-            f'Listening on /path (nav_msgs/Path); publishing shifted path to /path_zshifted with z_offset={self.z_offset} m'
+            f'Listening on /path; publishing shifted last {self.num_last_poses} poses '
+            f'to /path_zshifted_and_quit with z_offset={self.z_offset} m'
         )
 
     def on_path(self, msg: Path):
         shifted = Path()
-        shifted.header = msg.header  # keep frame_id & timestamp
+        shifted.header = msg.header
 
-        # Shift each pose's Z by z_offset
-        for p in msg.poses:
+        # Take the last N poses only
+        if len(msg.poses) > self.num_last_poses:
+            selected_poses = msg.poses[-self.num_last_poses:]
+        else:
+            selected_poses = msg.poses
+
+        for p in selected_poses:
             q = PoseStamped()
-            q.header = p.header  # keep per-pose header if present
-            q.pose = p.pose      # copy pose
+            q.header = p.header
+            q.pose = p.pose
             q.pose.position.z += self.z_offset
             shifted.poses.append(q)
 

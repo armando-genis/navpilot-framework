@@ -1,14 +1,14 @@
 waypoints_routing_node:
   ros__parameters:
-    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"
-    start_lanelet_id: 3848
-    end_lanelet_id: 2463
+    map_path: "/workspace/oms/me_4.osm"
+    start_lanelet_id: 206
+    end_lanelet_id: 295
     show_full_graph: false
     waypoint_interval: 3.0
 
 osm_visualizer:
   ros__parameters:
-    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"
+    map_path: "/workspace/oms/me_4.osm"
     occupancy_output_topic: "occupancy_grid_complete_map"
     resolution: 0.2
     close_radius: 1
