@@ -174,13 +174,11 @@ private:
     visualization_msgs::msg::MarkerArray global_planner_markers_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_planner_publisher_;
     void publishGlobalPlanner();
+    void publishGlobalPlannerOccupancyGrid();
     // =============================
     // map combination and convine with the map obstacles
     // =============================
 
-    // subscription for the global map
-    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr global_grid_map_sub_;
-    void globalMap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr map);
     // subscription for the obstacle information
     rclcpp::Subscription<obstacles_information_msgs::msg::ObstacleCollection>::SharedPtr obstacle_info_subscription_;
     void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
@@ -219,7 +217,6 @@ private:
 
     std::shared_ptr<planner::Node> current_node;
 
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_nodes_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr all_paths_pub_;
@@ -268,6 +265,16 @@ private:
 
     void buildWaypointDistanceFields();  // builds dist_wp1_m_ / dist_wp2_m_
 
+    // Occupancy grid parameters
+    double global_planner_resolution_;
+    int global_planner_close_radius_ = 1;
+    int global_planner_close_iters_ = 1;
+    int global_planner_outside_value_;
+    std::string global_planner_frame_id_;
+    std::string global_planner_occupancy_output_topic_;
+    nav_msgs::msg::OccupancyGrid global_planner_occupancy_grid_;
+
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr global_planner_occupancy_grid_publisher_;
 
 public:
     path_planning();

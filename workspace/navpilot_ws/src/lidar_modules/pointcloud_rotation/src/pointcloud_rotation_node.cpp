@@ -55,14 +55,35 @@ pointcloud_rotation_node::pointcloud_rotation_node(/* args */) : Node("pointclou
     this->declare_parameter("pointcloud_topic", std::string("/none"));
     this->declare_parameter("output_topic", std::string("/none"));
     this->declare_parameter("output_topic_ground", std::string("/none"));
+    this->declare_parameter("robot_footprint_topic", std::string("/robot_footprint_polygon"));
 
     this->get_parameter("pointcloud_topic", pointcloud_topic);
     this->get_parameter("output_topic", output_topic);
     this->get_parameter("output_topic_ground", output_topic_ground);
+    
+    std::string robot_footprint_topic;
+    this->get_parameter("robot_footprint_topic", robot_footprint_topic);
+
+    // ============== variables for robot footprint  ==============
+    this->declare_parameter("robot_footprint_x_max", 0.0);
+    this->declare_parameter("robot_footprint_y_max", 0.0);
+    this->declare_parameter("robot_footprint_z_max", 0.0);
+    this->declare_parameter("robot_footprint_x_min", 0.0);
+    this->declare_parameter("robot_footprint_y_min", 0.0);
+    this->declare_parameter("robot_footprint_z_min", 0.0);
+    
+    this->get_parameter("robot_footprint_x_max", robot_footprint_x_max);
+    this->get_parameter("robot_footprint_y_max", robot_footprint_y_max);
+    this->get_parameter("robot_footprint_z_max", robot_footprint_z_max);
+    this->get_parameter("robot_footprint_x_min", robot_footprint_x_min);
+    this->get_parameter("robot_footprint_y_min", robot_footprint_y_min);
+    this->get_parameter("robot_footprint_z_min", robot_footprint_z_min);
+
 
     sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(pointcloud_topic, 10, std::bind(&pointcloud_rotation_node::pointCloudCallback, this, std::placeholders::_1));
     pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, 10);
     pub_ground_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic_ground, 10);
+    pub_marker_ = this->create_publisher<visualization_msgs::msg::Marker>(robot_footprint_topic, 10);
 
     ROI_MAX_POINT = Eigen::Vector4f(roi_max_x_, roi_max_y_, roi_max_z_, 1);
     ROI_MIN_POINT = Eigen::Vector4f(roi_min_x_, roi_min_y_, roi_min_z_, 1);
@@ -77,6 +98,7 @@ pointcloud_rotation_node::pointcloud_rotation_node(/* args */) : Node("pointclou
     RCLCPP_INFO(this->get_logger(), "\033[1;34m---->pointcloud_topic: %s \033[0m", pointcloud_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "\033[1;34m---->output_topic: %s \033[0m", output_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "\033[1;34m---->output_topic_ground: %s \033[0m", output_topic_ground.c_str());
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m---->robot_footprint_topic: %s \033[0m", robot_footprint_topic.c_str());
 
     RCLCPP_INFO(this->get_logger(), "\033[1;34m---->voxel_leaf_size_x: %f \033[0m", voxel_leaf_size_x_);
     RCLCPP_INFO(this->get_logger(), "\033[1;34m---->voxel_leaf_size_y: %f \033[0m", voxel_leaf_size_y_);
@@ -99,6 +121,14 @@ pointcloud_rotation_node::pointcloud_rotation_node(/* args */) : Node("pointclou
     RCLCPP_INFO(this->get_logger(), "\033[1;34m----> sensor_height: %f \033[0m", sensor_height_);
 
     RCLCPP_INFO(this->get_logger(), "\033[1;34m----> sensor_rotation_y: %f \033[0m", sensor_rotation_y_);
+
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_x_max: %f \033[0m", robot_footprint_x_max);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_y_max: %f \033[0m", robot_footprint_y_max);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_z_max: %f \033[0m", robot_footprint_z_max);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_x_min: %f \033[0m", robot_footprint_x_min);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_y_min: %f \033[0m", robot_footprint_y_min);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> robot_footprint_z_min: %f \033[0m", robot_footprint_z_min);
+
     RCLCPP_INFO(this->get_logger(), "\033[1;32m----> pointcloud_rotation_node initialized.\033[0m");
 }
 
@@ -122,6 +152,9 @@ void pointcloud_rotation_node::pointCloudCallback(const sensor_msgs::msg::PointC
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZI>());
     pcl::transformPointCloud(*input_cloud, *transformed_cloud, rotation_matrix_);
+
+    // Remove robot's own footprint points from the pointcloud
+    removeRobotFootprintPoints(transformed_cloud);
 
     sensor_msgs::msg::PointCloud2 ground_msg;
     pcl::toROSMsg(*transformed_cloud, ground_msg);
@@ -182,6 +215,12 @@ void pointcloud_rotation_node::pointCloudCallback(const sensor_msgs::msg::PointC
         pub_ground_->publish(downsampled_cloud_msg);
     }
 
+    // Publish robot footprint marker
+    visualization_msgs::msg::Marker robot_marker = createRobotFootprintMarker();
+    robot_marker.header.frame_id = msg->header.frame_id; // Use the same frame as the pointcloud
+    robot_marker.header.stamp = msg->header.stamp;
+    pub_marker_->publish(robot_marker);
+
     // auto end_time = std::chrono::system_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - init_time).count();
     // std::cout << blue << "Execution time for path creation: " << duration << " ms" << reset << std::endl;
@@ -230,6 +269,69 @@ void pointcloud_rotation_node::extractInitialSeeds(const pcl::PointCloud<pcl::Po
             seed_points->points.push_back(point);
         }
     }
+}
+
+visualization_msgs::msg::Marker pointcloud_rotation_node::createRobotFootprintMarker()
+{
+    visualization_msgs::msg::Marker marker;
+    
+    // Set header
+    marker.header.stamp = this->now();
+    marker.header.frame_id = "velodyne";
+    
+    // Set marker properties
+    marker.ns = "robot_footprint";
+    marker.id = 0;
+    marker.type = visualization_msgs::msg::Marker::CUBE;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    
+    // Calculate center position
+    marker.pose.position.x = (robot_footprint_x_max + robot_footprint_x_min) / 2.0;
+    marker.pose.position.y = (robot_footprint_y_max + robot_footprint_y_min) / 2.0;
+    marker.pose.position.z = (robot_footprint_z_max + robot_footprint_z_min) / 2.0;
+    
+    // Set orientation (no rotation)
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.0;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 1.0;
+    
+    // Set scale (size of the cube)
+    marker.scale.x = robot_footprint_x_max - robot_footprint_x_min;
+    marker.scale.y = robot_footprint_y_max - robot_footprint_y_min;
+    marker.scale.z = robot_footprint_z_max - robot_footprint_z_min;
+    
+    // Set color (red with transparency)
+    marker.color.r = 1.0;
+    marker.color.g = 1.0;
+    marker.color.b = 1.0;
+    marker.color.a = 0.5; // Semi-transparent
+    
+    // Set lifetime (0 means permanent)
+    marker.lifetime = rclcpp::Duration(0, 0);
+    
+    return marker;
+}
+
+void pointcloud_rotation_node::removeRobotFootprintPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud)
+{
+    // Create a new pointcloud to store points outside the robot footprint
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZI>());
+    
+    // Filter out points that fall within the robot's 3D bounding box
+    for (const auto& point : cloud->points) {
+        // Check if point is outside the robot's bounding box
+        if (point.x < robot_footprint_x_min || point.x > robot_footprint_x_max ||
+            point.y < robot_footprint_y_min || point.y > robot_footprint_y_max ||
+            point.z < robot_footprint_z_min || point.z > robot_footprint_z_max) {
+            // Point is outside robot footprint, keep it
+            filtered_cloud->points.push_back(point);
+        }
+        // Points inside the bounding box are discarded (robot's own body)
+    }
+    
+    // Replace the original cloud with the filtered one
+    cloud = filtered_cloud;
 }
 
 int main(int argc, char **argv)

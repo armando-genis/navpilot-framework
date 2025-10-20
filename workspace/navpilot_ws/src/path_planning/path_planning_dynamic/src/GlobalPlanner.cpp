@@ -1,6 +1,8 @@
 #include "GlobalPlanner.hpp"
+#include <queue>
+#include <algorithm>
 
-GlobalPlanner::GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id)
+GlobalPlanner::GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id, double resolution, int close_radius, int close_iters, int outside_value, std::string frame_id)
 {
     x_offset_ = x_offset;
     y_offset_ = y_offset;
@@ -20,6 +22,16 @@ GlobalPlanner::GlobalPlanner(double x_offset, double y_offset, std::string map_p
     }
 
     map_routing(map);
+    occupancy_grid_ready_ = false;
+
+    resolution_ = resolution;
+    close_radius_ = close_radius;
+    close_iters_ = close_iters;
+    outside_value_ = outside_value;
+    frame_id_ = frame_id;
+
+    generateOccupancyGrid(map);
+    occupancy_grid_ready_ = true;
 }
 
 GlobalPlanner::~GlobalPlanner()
@@ -73,13 +85,12 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
 {
     std::cout << green << "Generating neighbor waypoints for routing path..." << reset << std::endl;
     
-    int waypoint_id = 0;
     std::set<lanelet::Id> processed_lanelets; // To avoid duplicates
     
     // Clear previous neighbor waypoints
     neighbor_points_.clear();
 
-
+    int lane_sequence_id = 0;
     int lanelet_id = 0;
     // First, add waypoints from the main routing path
     for (const auto &path_lanelet : shortestPath)
@@ -165,6 +176,7 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
             waypoint_data.heading = yaw;
             waypoint_data.priority = 1; // Blue path priority
             waypoint_data.lanelet_id = lanelet_id;
+            waypoint_data.lane_sequence_id = 0;
             main_path_points.push_back(waypoint_data);
 
         }
@@ -173,19 +185,84 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
     }
 
     lanelet_id = 0;
-    // Then, add waypoints from neighboring and reachable lanelets
+    lane_sequence_id = 1;
+    
+    // Collect all neighbor lanelets first, then group them by subsequential connections
+    std::vector<lanelet::ConstLanelet> all_neighbor_lanelets;
     for (const auto &path_lanelet : shortestPath)
     {
         // Get all lanelets in the same lane (besides the current lanelet)
         ConstLanelets lane_lanelets = routingGraph->besides(path_lanelet);
         
-        // Process each lanelet in the lane (excluding the main path lanelet)
         for (const auto &lanelet : lane_lanelets)
         {
             // Skip the main path lanelet and already processed lanelets
             if (lanelet.id() == path_lanelet.id() || processed_lanelets.find(lanelet.id()) != processed_lanelets.end())
                 continue;
+            all_neighbor_lanelets.push_back(lanelet);
+        }
+    }
+    
+    // Group subsequential lanelets together
+    std::vector<std::vector<lanelet::ConstLanelet>> neighbor_groups;
+    std::set<lanelet::Id> grouped_lanelets;
+    
+    for (const auto &lanelet : all_neighbor_lanelets)
+    {
+        if (grouped_lanelets.find(lanelet.id()) != grouped_lanelets.end())
+            continue;
+            
+        std::vector<lanelet::ConstLanelet> current_group;
+        std::queue<lanelet::ConstLanelet> to_process;
+        to_process.push(lanelet);
+        
+        while (!to_process.empty())
+        {
+            auto current_lanelet = to_process.front();
+            to_process.pop();
+            
+            if (grouped_lanelets.find(current_lanelet.id()) != grouped_lanelets.end())
+                continue;
                 
+            grouped_lanelets.insert(current_lanelet.id());
+            current_group.push_back(current_lanelet);
+            
+            // Find connected lanelets (following and previous)
+            auto following = routingGraph->following(current_lanelet, true);
+            auto previous = routingGraph->previous(current_lanelet, true);
+            
+            // Add following lanelets that are also neighbors
+            for (const auto &follow_lanelet : following)
+            {
+                if (grouped_lanelets.find(follow_lanelet.id()) == grouped_lanelets.end() &&
+                    std::find(all_neighbor_lanelets.begin(), all_neighbor_lanelets.end(), follow_lanelet) != all_neighbor_lanelets.end())
+                {
+                    to_process.push(follow_lanelet);
+                }
+            }
+            
+            // Add previous lanelets that are also neighbors
+            for (const auto &prev_lanelet : previous)
+            {
+                if (grouped_lanelets.find(prev_lanelet.id()) == grouped_lanelets.end() &&
+                    std::find(all_neighbor_lanelets.begin(), all_neighbor_lanelets.end(), prev_lanelet) != all_neighbor_lanelets.end())
+                {
+                    to_process.push(prev_lanelet);
+                }
+            }
+        }
+        
+        if (!current_group.empty())
+        {
+            neighbor_groups.push_back(current_group);
+        }
+    }
+    
+    // Process each group with the same lane_sequence_id
+    for (const auto &group : neighbor_groups)
+    {
+        for (const auto &lanelet : group)
+        {
             processed_lanelets.insert(lanelet.id());
             lanelet_id = lanelet.id();
             auto points = lanelet.centerline3d();
@@ -263,11 +340,13 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 2; // Orange path priority
                 waypoint_data.lanelet_id = lanelet_id;
+                waypoint_data.lane_sequence_id = lane_sequence_id; // Same ID for all lanelets in the group
                 neighbor_lanelet_points.push_back(waypoint_data);
             }
 
             neighbor_points_.push_back(neighbor_lanelet_points);
         }
+        lane_sequence_id++; // Increment after each group (not after each individual lanelet)
     }
 
     // std::cout << blue << "Finding lanelets that branch off through curves..." << reset << std::endl;
@@ -403,10 +482,12 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 3; // Purple path priority
                 waypoint_data.lanelet_id = lanelet_id;
+                waypoint_data.lane_sequence_id = lane_sequence_id;
                 branching_lanelet_points.push_back(waypoint_data);
             }
 
             neighbor_points_.push_back(branching_lanelet_points);
+            lane_sequence_id++;
         }
     }
     
@@ -542,10 +623,11 @@ void GlobalPlanner::generateNeighborWaypoints(lanelet::LaneletMapPtr &map, routi
                 waypoint_data.heading = yaw;
                 waypoint_data.priority = 4; // Purple path priority
                 waypoint_data.lanelet_id = lanelet_id;
+                waypoint_data.lane_sequence_id = lane_sequence_id; 
                 adjacent_lanelet_points.push_back(waypoint_data);
             }
-
             neighbor_points_.push_back(adjacent_lanelet_points);
+            lane_sequence_id++; 
         }
     }
 
@@ -736,11 +818,7 @@ bool GlobalPlanner::isCompatibleTrajectory(const lanelet::ConstLanelet &path_lan
         return false;
     }
     
-    // 3. Cross product analysis for turn detection
-    double cross_product = path_dx * candidate_dy - path_dy * candidate_dx;
-    double cross_magnitude = std::abs(cross_product);
-    
-    // 4. Check if this is a consistent diverging curve by analyzing the path end direction
+    // Check if this is a consistent diverging curve by analyzing the path end direction
     // Get the direction at the end of the path lanelet
     std::vector<lanelet::ConstPoint3d> path_vector(path_points.begin(), path_points.end());
     std::vector<lanelet::ConstPoint3d> candidate_vector(candidate_points.begin(), candidate_points.end());
@@ -776,7 +854,7 @@ bool GlobalPlanner::isCompatibleTrajectory(const lanelet::ConstLanelet &path_lan
         int path_idx = (i * (path_points.size() - 1)) / num_samples;
         int candidate_idx = (i * (candidate_points.size() - 1)) / num_samples;
         
-        if (path_idx + 1 >= path_points.size() || candidate_idx + 1 >= candidate_points.size())
+        if (path_idx + 1 >= static_cast<int>(path_points.size()) || candidate_idx + 1 >= static_cast<int>(candidate_points.size()))
             continue;
         
         // Calculate segment directions
@@ -1495,7 +1573,7 @@ double GlobalPlanner::calculatePathLength(const routing::LaneletPath &path)
 // Helper function to calculate remaining path length from a given index
 double GlobalPlanner::calculateRemainingPathLength(const routing::LaneletPath &path, int start_index)
 {
-    if (start_index < 0 || start_index >= path.size())
+    if (start_index < 0 || start_index >= static_cast<int>(path.size()))
         return 0.0;
     
     double remaining_length = 0.0;
@@ -1528,4 +1606,262 @@ std::vector<point_struct> GlobalPlanner::getAllWaypointsStruct() const
     }
     
     return filtered_points;
+}
+
+
+// occupancy grid helper functions
+
+void GlobalPlanner::generateOccupancyGrid(lanelet::LaneletMapPtr &t_map)
+{
+  std::cout << "Generating occupancy grid from lanelets..." << std::endl;
+  
+  // 1) Compute bounding box from all lanelet points
+  double min_x = std::numeric_limits<double>::infinity();
+  double min_y = std::numeric_limits<double>::infinity();
+  double max_x = -std::numeric_limits<double>::infinity();
+  double max_y = -std::numeric_limits<double>::infinity();
+
+  auto updateBounds = [&](double x, double y) {
+    if (x < min_x) min_x = x;
+    if (x > max_x) max_x = x;
+    if (y < min_y) min_y = y;
+    if (y > max_y) max_y = y;
+  };
+
+  // Get bounds from all lanelets (excluding crosswalks)
+  for (const auto &ll : t_map->laneletLayer)
+  {
+    // Skip crosswalks for occupancy grid
+    if (ll.hasAttribute(lanelet::AttributeName::Subtype) &&
+        ll.attribute(lanelet::AttributeName::Subtype).value() == lanelet::AttributeValueString::Crosswalk)
+    {
+      continue;
+    }
+
+    // Update bounds with left and right boundary points
+    for (const auto &point : ll.leftBound())
+    {
+      updateBounds(point.x(), point.y());
+    }
+    for (const auto &point : ll.rightBound())
+    {
+      updateBounds(point.x(), point.y());
+    }
+  }
+
+  if (!std::isfinite(min_x) || !std::isfinite(min_y) || !std::isfinite(max_x) || !std::isfinite(max_y))
+  {
+    std::cout << "Invalid bounds computed; skipping occupancy grid generation." << std::endl;
+    return;
+  }
+
+  // 2) Calculate grid dimensions
+  int width = static_cast<int>(std::ceil((max_x - min_x) / resolution_)) + 1;
+  int height = static_cast<int>(std::ceil((max_y - min_y) / resolution_)) + 1;
+  width = std::max(1, width);
+  height = std::max(1, height);
+
+  std::cout << "Grid dimensions: " << width << "x" << height << ", resolution: " << resolution_ << std::endl;
+
+  // 3) Initialize grid with outside value (occupied/unknown)
+  std::vector<int8_t> grid(width * height, static_cast<int8_t>(outside_value_));
+
+  // 4) Fill lanelet polygons with free space (0)
+  for (const auto &ll : t_map->laneletLayer)
+  {
+    // Skip crosswalks for occupancy grid
+    if (ll.hasAttribute(lanelet::AttributeName::Subtype) &&
+        ll.attribute(lanelet::AttributeName::Subtype).value() == lanelet::AttributeValueString::Crosswalk)
+    {
+      continue;
+    }
+
+    // Create polygon from lanelet boundaries
+    std::vector<lanelet::ConstPoint3d> polygon_points;
+    
+    // Add left boundary points
+    for (const auto &point : ll.leftBound())
+    {
+      polygon_points.push_back(point);
+    }
+    
+    // Add right boundary points in reverse order
+    const auto &right_bound = ll.rightBound();
+    for (int i = right_bound.size() - 1; i >= 0; --i)
+    {
+      polygon_points.push_back(right_bound[i]);
+    }
+    
+    // Close the polygon
+    if (!polygon_points.empty())
+    {
+      polygon_points.push_back(polygon_points[0]);
+    }
+
+    // Fill the polygon with free space
+    fillLaneletPolygon(polygon_points, width, height, min_x, min_y, grid, 0);
+  }
+
+  // 5) Apply morphological closing to seal gaps
+  if (close_radius_ > 0 && close_iters_ > 0)
+  {
+    morphClose(grid, width, height, close_radius_, close_iters_);
+  }
+
+  // 6) Fill occupancy grid message
+  occupancy_grid_.header.stamp = rclcpp::Clock().now();
+  occupancy_grid_.header.frame_id = frame_id_;
+  occupancy_grid_.info.map_load_time = occupancy_grid_.header.stamp;
+  occupancy_grid_.info.resolution = static_cast<float>(resolution_);
+  occupancy_grid_.info.width = static_cast<uint32_t>(width);
+  occupancy_grid_.info.height = static_cast<uint32_t>(height);
+  occupancy_grid_.info.origin.position.x = min_x;
+  occupancy_grid_.info.origin.position.y = min_y;
+  occupancy_grid_.info.origin.position.z = 0.0;
+  occupancy_grid_.info.origin.orientation.w = 1.0;
+
+  occupancy_grid_.data = std::move(grid);
+  occupancy_grid_ready_ = true;
+
+  std::cout << "Occupancy grid generated successfully!" << std::endl;
+}
+
+void GlobalPlanner::worldToGrid(double wx, double wy, double min_x, double min_y, int &gx, int &gy) const
+{
+  gx = static_cast<int>(std::floor((wx - min_x) / resolution_));
+  gy = static_cast<int>(std::floor((wy - min_y) / resolution_));
+}
+
+void GlobalPlanner::drawLine(int x0, int y0, int x1, int y1, int width, int height,
+                             std::vector<int8_t> &data, int8_t value) const
+{
+  auto inBounds = [&](int x, int y) { return x >= 0 && x < width && y >= 0 && y < height; };
+  
+  int dx = std::abs(x1 - x0), sx = (x0 < x1) ? 1 : -1;
+  int dy = -std::abs(y1 - y0), sy = (y0 < y1) ? 1 : -1;
+  int err = dx + dy;
+  int x = x0, y = y0;
+  
+  while (true)
+  {
+    if (inBounds(x, y)) data[y * width + x] = value;
+    if (x == x1 && y == y1) break;
+    int e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x += sx; }
+    if (e2 <= dx) { err += dx; y += sy; }
+  }
+}
+
+void GlobalPlanner::morphClose(std::vector<int8_t> &data, int width, int height, int radius, int iters) const
+{
+  if (radius <= 0 || iters <= 0) return;
+
+  auto dilate = [&](std::vector<int8_t> &src) {
+    std::vector<int8_t> dst = src;
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        if (src[y * width + x] == 0) {
+          for (int j = -radius; j <= radius; ++j) {
+            for (int i = -radius; i <= radius; ++i) {
+              int nx = x + i, ny = y + j;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                dst[ny * width + nx] = 0;
+            }
+          }
+        }
+      }
+    }
+    src.swap(dst);
+  };
+
+  auto erode = [&](std::vector<int8_t> &src) {
+    std::vector<int8_t> dst = src;
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        if (src[y * width + x] == 0) {
+          bool keep = true;
+          for (int j = -radius; j <= radius && keep; ++j) {
+            for (int i = -radius; i <= radius; ++i) {
+              int nx = x + i, ny = y + j;
+              if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+              if (src[ny * width + nx] != 0) keep = false;
+            }
+          }
+          if (!keep) dst[y * width + x] = static_cast<int8_t>(outside_value_);
+        }
+      }
+    }
+    src.swap(dst);
+  };
+
+  for (int k = 0; k < iters; ++k) { dilate(data); erode(data); }
+}
+
+void GlobalPlanner::fillLaneletPolygon(const std::vector<lanelet::ConstPoint3d> &points, int width, int height,
+                                       double min_x, double min_y, std::vector<int8_t> &grid, int8_t value) const
+{
+  if (points.size() < 3) return;
+
+  // Convert polygon points to grid coordinates
+  std::vector<std::pair<int, int>> grid_points;
+  for (const auto &point : points)
+  {
+    int gx, gy;
+    worldToGrid(point.x(), point.y(), min_x, min_y, gx, gy);
+    grid_points.push_back({gx, gy});
+  }
+
+  // Use scanline algorithm to fill polygon
+  int min_y_grid = height, max_y_grid = 0;
+  for (const auto &p : grid_points)
+  {
+    min_y_grid = std::min(min_y_grid, p.second);
+    max_y_grid = std::max(max_y_grid, p.second);
+  }
+
+  for (int y = min_y_grid; y <= max_y_grid; ++y)
+  {
+    std::vector<int> intersections;
+    
+    // Find intersections with horizontal line
+    for (size_t i = 0; i < grid_points.size() - 1; ++i)
+    {
+      int y1 = grid_points[i].second;
+      int y2 = grid_points[i + 1].second;
+      
+      if ((y1 <= y && y < y2) || (y2 <= y && y < y1))
+      {
+        int x1 = grid_points[i].first;
+        int x2 = grid_points[i + 1].first;
+        int x = x1 + (y - y1) * (x2 - x1) / (y2 - y1);
+        intersections.push_back(x);
+      }
+    }
+    
+    // Sort intersections and fill between pairs
+    std::sort(intersections.begin(), intersections.end());
+    for (size_t i = 0; i < intersections.size(); i += 2)
+    {
+      if (i + 1 < intersections.size())
+      {
+        for (int x = intersections[i]; x <= intersections[i + 1]; ++x)
+        {
+          if (x >= 0 && x < width && y >= 0 && y < height)
+          {
+            grid[y * width + x] = value;
+          }
+        }
+      }
+    }
+  }
+}
+
+nav_msgs::msg::OccupancyGrid GlobalPlanner::getOccupancyGrid()
+{
+    return occupancy_grid_;
+}
+
+bool GlobalPlanner::isOccupancyGridReady()
+{
+    return occupancy_grid_ready_;
 }

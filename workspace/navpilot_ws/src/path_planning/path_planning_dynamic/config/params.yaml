@@ -9,9 +9,15 @@ path_planning_node:
     step_car: 0.2
     tree_depth: 15
     branching_factor: 5
-    map_path: "/workspace/oms/me_4.osm"
-    start_lanelet_id: 206
-    end_lanelet_id: 295
+    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"
+    start_lanelet_id: 4246
+    end_lanelet_id: 692
     x_offset: 0.0
     y_offset: 0.0
     num_lateral_offsets: 0
+    global_planner_resolution: 0.2
+    global_planner_close_radius: 1
+    global_planner_close_iters: 1
+    global_planner_outside_value: 100
+    global_planner_frame_id: "map"
+    global_planner_occupancy_output_topic: "global_planner_occupancy_grid"

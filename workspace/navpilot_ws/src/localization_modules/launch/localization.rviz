@@ -31,8 +31,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 88.46411895751953
-        Min Value: -73.15654754638672
+        Max Value: 42.508277893066406
+        Min Value: -37.351322174072266
         Value: true
       Axis: Y
       Channel Name: ring
@@ -109,6 +109,8 @@ Visualization Manager:
           Value: true
         light_2:
           Value: true
+        map:
+          Value: true
         vectornav:
           Value: true
         velodyne:
@@ -121,7 +123,19 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        map:
+          velodyne:
+            base_link:
+              base_footprint:
+                {}
+              light_1:
+                {}
+              light_2:
+                {}
+              vectornav:
+                {}
+              zedd:
+                {}
       Update Interval: 0
       Value: true
     - Alpha: 0.800000011920929
@@ -142,11 +156,6 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -247,7 +256,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /sdv/steering/current_reference
+        Value: /path
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true

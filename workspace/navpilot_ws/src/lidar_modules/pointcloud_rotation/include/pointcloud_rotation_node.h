@@ -5,6 +5,7 @@
 
 // Ros2
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 // PCL
 #include <pcl/point_types.h>
@@ -89,12 +90,24 @@ private:
     float sensor_rotation_y_;
     Eigen::Matrix4f rotation_matrix_;
 
+    // ============== variables for robot footprint  ==============
+    float robot_footprint_x_max;
+    float robot_footprint_y_max;
+    float robot_footprint_z_max;
+    float robot_footprint_x_min;
+    float robot_footprint_y_min;
+    float robot_footprint_z_min;
+
+
     // functions
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+    visualization_msgs::msg::Marker createRobotFootprintMarker();
+    void removeRobotFootprintPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud);
     // subscriber & publisher
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_ground_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_;
 
 public:
     pointcloud_rotation_node(/* args */);

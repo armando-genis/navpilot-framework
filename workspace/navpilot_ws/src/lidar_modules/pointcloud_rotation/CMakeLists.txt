@@ -15,6 +15,7 @@ find_package(message_filters REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # External dependencies
 find_package(Eigen3 REQUIRED)
@@ -40,6 +41,7 @@ ament_target_dependencies(pointcloud_rotation_node
   tf2_ros
   tf2_geometry_msgs
   pcl_conversions
+  visualization_msgs
 )
 
 target_include_directories(pointcloud_rotation_node PUBLIC

@@ -128,6 +128,8 @@ colcon build --packages-select path_planning_dynamic
 colcon build --packages-select obstacles_information_msgs
 colcon build --packages-select pointcloud_clustering
 
+colcon build --packages-select pointcloud_rotation
+
 sudo apt install ros-$ROS_DISTRO-vision-opencv
 sudo apt install ros-$ROS_DISTRO-grid-map-ros
 sudo apt install ros-$ROS_DISTRO-grid-map-cv
@@ -146,6 +148,8 @@ ros2 launch /workspace/navpilot_ws/src/path_planning/launch/localization.launch.
 /workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm
 
 /workspace/models/sdv.glb
+
+/workspace/models/formula_uno_car_rot.glb
 
 /workspace/models/stop_callejero.ply
 
@@ -168,3 +172,19 @@ rviz2
 problem for the future
 
 if the map is bigger when gettin the path and the nehibours the waypoints vector will be larger and the fucntion compute_closest_waypoint will not work because it only compute in windows of 100 waypoints. so before in the global planner will be good to ordonate the waypoints based on distances and then store them.
+
+<!-- street test -->
+
+ros2 bag play oct-8-street2
+
+ros2 launch /workspace/navpilot_ws/src/localization_modules/launch/localization.launch.py
+
+python3 /workspace/navpilot_ws/src/path_planning/path_z_shift_and_quit.py
+
+ros2 bag record -a --storage mcap -o street_tec_localization_path
+
+<!-- bin files -->
+
+ros2 bag play street_tec_localization_path
+
+python3 /workspace/navpilot_ws/src/pc2_to_bin/pc2_to_bin_timer.py

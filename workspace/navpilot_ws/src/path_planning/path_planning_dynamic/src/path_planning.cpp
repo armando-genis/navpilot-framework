@@ -17,6 +17,14 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->declare_parameter<int>("start_lanelet_id", 0);
     this->declare_parameter<int>("end_lanelet_id", 0);
 
+    // Occupancy grid parameters
+    this->declare_parameter<double>("global_planner_resolution", 0.20);
+    this->declare_parameter<int>("global_planner_close_radius", 0);
+    this->declare_parameter<int>("global_planner_close_iters", 0);
+    this->declare_parameter<int>("global_planner_outside_value", 100);
+    this->declare_parameter<std::string>("global_planner_frame_id", "map");
+    this->declare_parameter<std::string>("global_planner_occupancy_output_topic", "occupancy_grid_complete_map");
+
     this->get_parameter("maxSteerAngle", maxSteerAngle);
     this->get_parameter("wheelBase", wheelBase);
     this->get_parameter("axleToFront", axleToFront);
@@ -32,11 +40,13 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->get_parameter("start_lanelet_id", start_lanelet_id_);
     this->get_parameter("end_lanelet_id", end_lanelet_id_);
 
-    // subscription for ma comination btw the glonal ma and the obstacles information
-    // occupancy_grid_complete_map_1 ->  map from occupancy_pub -> resolution 1.0
-    // occupancy_grid_complete_map_2 -> map from osm visualizer -> resolution 0.2
-    global_grid_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-        "/occupancy_grid_complete_map_2", 10, std::bind(&path_planning::globalMap_callback, this, std::placeholders::_1));
+    // Occupancy grid parameters
+    this->get_parameter("global_planner_resolution", global_planner_resolution_);
+    this->get_parameter("global_planner_close_radius", global_planner_close_radius_);
+    this->get_parameter("global_planner_close_iters", global_planner_close_iters_);
+    this->get_parameter("global_planner_outside_value", global_planner_outside_value_);
+    this->get_parameter("global_planner_frame_id", global_planner_frame_id_);
+    this->get_parameter("global_planner_occupancy_output_topic", global_planner_occupancy_output_topic_);
 
     obstacle_info_subscription_ = this->create_subscription<obstacles_information_msgs::msg::ObstacleCollection>(
         "/obstacle_info", 10, std::bind(&path_planning::obstacle_info_callback, this, std::placeholders::_1));
@@ -45,8 +55,6 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     occupancy_grid_pub_test_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
         "/occupancy_grid_obstacles", 10);
     
-    real_nodes_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/real_nodes", 10);
-
     real_trajectories_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/none_real_traj", 10);
 
@@ -62,13 +70,16 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     global_planner_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/global_planner", 10);
 
+    global_planner_occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+        global_planner_occupancy_output_topic_, 10);
+
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     rescaled_chunk_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     car_state_ = std::make_shared<State>();
     grid_map_ = nullptr;
     current_node = nullptr;
-    global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_);
+    global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_, global_planner_resolution_, global_planner_close_radius_, global_planner_close_iters_, global_planner_outside_value_, global_planner_frame_id_);
 
     // Create the vehicle geometry
     car_data_ = CarData(maxSteerAngle, wheelBase, axleToFront, axleToBack, width);
@@ -95,6 +106,12 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     precomputeCommandSamples();
     all_waypoints_from_global_planner_ = global_planner_->getAllAllWaypointsStruct();
     publishGlobalPlanner();
+    if (global_planner_->isOccupancyGridReady())
+    {
+        global_planner_occupancy_grid_ = global_planner_->getOccupancyGrid();
+        publishGlobalPlannerOccupancyGrid();
+        global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>(global_planner_occupancy_grid_);
+    }
 }
 
 
@@ -139,6 +156,15 @@ void path_planning::publishGlobalPlanner()
     std::cout << green << "Publishing global planner" << reset << std::endl;
     std::cout << green << "Global planner size: " << all_waypoints_from_global_planner_.size() << reset << std::endl;
     global_planner_markers_.markers.clear();
+    
+    // Clear previous text markers
+    visualization_msgs::msg::Marker clear_text;
+    clear_text.header.frame_id = "map";
+    clear_text.header.stamp = this->now();
+    clear_text.action = visualization_msgs::msg::Marker::DELETEALL;
+    clear_text.ns = "global_planner_text";
+    global_planner_markers_.markers.push_back(clear_text);
+    
     for (size_t i = 0; i < all_waypoints_from_global_planner_.size(); i++)
     {
             // Create waypoint marker for main path from the global planner
@@ -151,9 +177,78 @@ void path_planning::publishGlobalPlanner()
             waypoint_marker.action = visualization_msgs::msg::Marker::ADD;
 
             waypoint_marker.color.a = 0.8;
-            waypoint_marker.color.r = 0.0;
-            waypoint_marker.color.g = 0.0;
-            waypoint_marker.color.b = 1.0;
+            
+            // Color based on lane_sequence_id
+            int seq_id = all_waypoints_from_global_planner_[i].lane_sequence_id;
+            switch (seq_id) {
+                case 0: // Main path - Blue
+                    waypoint_marker.color.r = 0.0;
+                    waypoint_marker.color.g = 0.0;
+                    waypoint_marker.color.b = 1.0;
+                    break;
+                case 1: // First neighbor group - Green
+                    waypoint_marker.color.r = 0.0;
+                    waypoint_marker.color.g = 1.0;
+                    waypoint_marker.color.b = 0.0;
+                    break;
+                case 2: // Second neighbor group - Red
+                    waypoint_marker.color.r = 1.0;
+                    waypoint_marker.color.g = 0.0;
+                    waypoint_marker.color.b = 0.0;
+                    break;
+                case 3: // Third neighbor group - Yellow
+                    waypoint_marker.color.r = 1.0;
+                    waypoint_marker.color.g = 1.0;
+                    waypoint_marker.color.b = 0.0;
+                    break;
+                case 4: // Fourth neighbor group - Magenta
+                    waypoint_marker.color.r = 1.0;
+                    waypoint_marker.color.g = 0.0;
+                    waypoint_marker.color.b = 1.0;
+                    break;
+                case 5: // Fifth neighbor group - Cyan
+                    waypoint_marker.color.r = 0.0;
+                    waypoint_marker.color.g = 1.0;
+                    waypoint_marker.color.b = 1.0;
+                    break;
+                case 6: // Sixth neighbor group - Orange
+                    waypoint_marker.color.r = 1.0;
+                    waypoint_marker.color.g = 0.5;
+                    waypoint_marker.color.b = 0.0;
+                    break;
+                case 7: // Seventh neighbor group - Purple
+                    waypoint_marker.color.r = 0.5;
+                    waypoint_marker.color.g = 0.0;
+                    waypoint_marker.color.b = 1.0;
+                    break;
+                case 8: // Eighth neighbor group - Pink
+                    waypoint_marker.color.r = 1.0;
+                    waypoint_marker.color.g = 0.75;
+                    waypoint_marker.color.b = 0.8;
+                    break;
+                case 9: // Ninth neighbor group - Light Blue
+                    waypoint_marker.color.r = 0.5;
+                    waypoint_marker.color.g = 0.8;
+                    waypoint_marker.color.b = 1.0;
+                    break;
+                default: // Higher sequence IDs - Cycle through colors
+                    {
+                        int color_index = seq_id % 10;
+                        switch (color_index) {
+                            case 0: waypoint_marker.color.r = 0.0; waypoint_marker.color.g = 0.0; waypoint_marker.color.b = 1.0; break;
+                            case 1: waypoint_marker.color.r = 0.0; waypoint_marker.color.g = 1.0; waypoint_marker.color.b = 0.0; break;
+                            case 2: waypoint_marker.color.r = 1.0; waypoint_marker.color.g = 0.0; waypoint_marker.color.b = 0.0; break;
+                            case 3: waypoint_marker.color.r = 1.0; waypoint_marker.color.g = 1.0; waypoint_marker.color.b = 0.0; break;
+                            case 4: waypoint_marker.color.r = 1.0; waypoint_marker.color.g = 0.0; waypoint_marker.color.b = 1.0; break;
+                            case 5: waypoint_marker.color.r = 0.0; waypoint_marker.color.g = 1.0; waypoint_marker.color.b = 1.0; break;
+                            case 6: waypoint_marker.color.r = 1.0; waypoint_marker.color.g = 0.5; waypoint_marker.color.b = 0.0; break;
+                            case 7: waypoint_marker.color.r = 0.5; waypoint_marker.color.g = 0.0; waypoint_marker.color.b = 1.0; break;
+                            case 8: waypoint_marker.color.r = 1.0; waypoint_marker.color.g = 0.75; waypoint_marker.color.b = 0.8; break;
+                            case 9: waypoint_marker.color.r = 0.5; waypoint_marker.color.g = 0.8; waypoint_marker.color.b = 1.0; break;
+                        }
+                    }
+                    break;
+            }
 
             waypoint_marker.pose.position.x = all_waypoints_from_global_planner_[i].x;
             waypoint_marker.pose.position.y = all_waypoints_from_global_planner_[i].y;
@@ -170,20 +265,55 @@ void path_planning::publishGlobalPlanner()
             waypoint_marker.scale.y = 0.2; // Arrow width
             waypoint_marker.scale.z = 0.2; // Arrow height
 
-
-        global_planner_markers_.markers.push_back(waypoint_marker);
+            global_planner_markers_.markers.push_back(waypoint_marker);
+            
+            // Create text marker for lane_sequence_id
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header.frame_id = "map";
+            text_marker.header.stamp = this->now();
+            text_marker.ns = "global_planner_text";
+            text_marker.id = i;
+            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+            
+            // Position text above the arrow
+            text_marker.pose.position.x = all_waypoints_from_global_planner_[i].x;
+            text_marker.pose.position.y = all_waypoints_from_global_planner_[i].y;
+            text_marker.pose.position.z = 0.5; // Above the arrow
+            
+            // Set text content to lane_sequence_id
+            text_marker.text = std::to_string(all_waypoints_from_global_planner_[i].lane_sequence_id);
+            
+            // Text styling
+            text_marker.scale.z = 0.3; // Text size
+            text_marker.color.a = 1.0;
+            text_marker.color.r = 1.0; // White text
+            text_marker.color.g = 1.0;
+            text_marker.color.b = 1.0;
+            
+            global_planner_markers_.markers.push_back(text_marker);
     }
     global_planner_publisher_->publish(global_planner_markers_);
 }
 
 // =============================
-// map combination & rescale for put obstacles in the global map
+// publish the global planner occupancy grid
 // =============================
-void path_planning::globalMap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr map)
+void path_planning::publishGlobalPlannerOccupancyGrid()
 {
-    global_map_ = map;
+
+    std::cout << green << "Publishing global planner occupancy grid" << reset << std::endl;
+    std::cout << green << "Grid size: " << global_planner_occupancy_grid_.info.width << "x" 
+                << global_planner_occupancy_grid_.info.height << ", resolution: " 
+                << global_planner_occupancy_grid_.info.resolution << reset << std::endl;
+    
+    global_planner_occupancy_grid_publisher_->publish(global_planner_occupancy_grid_);
+
 }
 
+// =============================
+// map combination & rescale for put obstacles in the global map
+// =============================
 void path_planning::obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg)
 {
     if (!global_map_)

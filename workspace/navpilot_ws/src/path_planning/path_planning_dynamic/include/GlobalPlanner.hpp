@@ -3,6 +3,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include "visualization_msgs/msg/marker_array.hpp"
+#include <nav_msgs/msg/occupancy_grid.hpp>
 
 // lanelet libraries
 #include <lanelet2_io/Io.h>
@@ -25,7 +26,7 @@ using namespace lanelet;
 using namespace std;
 
 struct point_struct { double x, y, heading; 
-                    int priority, lanelet_id;};
+                    int priority, lanelet_id, lane_sequence_id;};
 
 class GlobalPlanner
 {
@@ -64,10 +65,33 @@ private:
     double calculateRemainingPathLength(const routing::LaneletPath &path, int start_index);
     std::vector<point_struct> getAllWaypointsStruct() const;
 
+    // Occupancy grid helper functions
+    void generateOccupancyGrid(lanelet::LaneletMapPtr &t_map);
+    void worldToGrid(double wx, double wy, double min_x, double min_y, int &gx, int &gy) const;
+    void drawLine(int x0, int y0, int x1, int y1, int width, int height, std::vector<int8_t> &data, int8_t value) const;
+    void morphClose(std::vector<int8_t> &data, int width, int height, int radius, int iters) const;
+    void fillLaneletPolygon(const std::vector<lanelet::ConstPoint3d> &points, int width, int height, 
+                            double min_x, double min_y, std::vector<int8_t> &grid, int8_t value) const;
+
+
+    // Occupancy grid parameters
+    double resolution_;
+    int close_radius_ = 1;
+    int close_iters_ = 1;
+    int outside_value_;
+    std::string frame_id_;
+
+      // Occupancy grid data
+    nav_msgs::msg::OccupancyGrid occupancy_grid_;
+    bool occupancy_grid_ready_;
+
 public:
-    GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id);
+    GlobalPlanner(double x_offset, double y_offset, std::string map_path, int start_lanelet_id, int end_lanelet_id, double resolution, int close_radius, int close_iters, int outside_value, std::string frame_id);
     ~GlobalPlanner();
     std::vector<point_struct> getAllAllWaypointsStruct();
+
+    nav_msgs::msg::OccupancyGrid getOccupancyGrid();
+    bool isOccupancyGridReady();
 };
 
 #endif // GLOBAL_PLANNER_HPP
