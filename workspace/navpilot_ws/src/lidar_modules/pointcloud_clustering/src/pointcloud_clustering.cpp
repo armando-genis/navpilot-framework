@@ -56,6 +56,7 @@ void pointcloud_clustering_node::pointCloudCallback(const sensor_msgs::msg::Poin
     if (input_cloud->empty())
     {
         std::cout << red << "Received empty point cloud" << reset << std::endl;
+        imaginaryObstacle();
         return;
     }
 
@@ -69,6 +70,11 @@ void pointcloud_clustering_node::pointCloudCallback(const sensor_msgs::msg::Poin
         {
             // std::cout << green << "Number of clusters: " << clusters.size() << reset << std::endl;
             convex_hull(clusters);
+        }
+        else
+        {
+            std::cout << yellow << "No clusters found" << reset << std::endl;
+            imaginaryObstacle();
         }
     }
     catch (const std::exception &e)
@@ -159,6 +165,37 @@ void pointcloud_clustering_node::convex_hull(std::vector<pcl::PointCloud<pcl::Po
         std::cout << yellow << "Obstacle collection size: " << obstacle_collection.obstacles.size() << reset << std::endl;
         obstacle_info_publisher_->publish(obstacle_collection);
     }
+    else
+    {
+        imaginaryObstacle();
+    }
+}
+
+void pointcloud_clustering_node::imaginaryObstacle()
+{
+    // This function can be implemented to create imaginary obstacles for convenience
+    // > If clustering dont detect any obstacle, this function can create a static obstacle far from the robot
+    // > Or is useful if pointcloud is empty
+    obstacle_collection.obstacles.clear();
+    obstacle_collection.header.stamp = rclcpp::Clock{}.now();
+    obstacle_collection.header.frame_id = "base_link";
+
+    path_planning_dynamic::msg::Obstacle obstacle;
+    geometry_msgs::msg::Polygon polygon;
+    geometry_msgs::msg::Point32 p;
+    p.x = 5000.0;  // <--- 5km in front of the robot
+    p.y = 0.0;
+    p.z = 0.0;
+    polygon.points.push_back(p);
+    obstacle.polygon = polygon;
+    obstacle.id = 1;
+    obstacle.type = "NONE";
+    
+    // Add the imaginary obstacle to the collection
+    obstacle_collection.obstacles.push_back(obstacle);
+    std::cout << yellow << "Imaginary Obstacle published " << reset << std::endl;
+    obstacle_info_publisher_->publish(obstacle_collection);
+
 }
 
 int main(int argc, char **argv)
