@@ -50,6 +50,7 @@ private:
     // Point Cloud callback
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
     void convex_hull(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> cloud_clusters);
+    void imaginaryObstacle();
 
     // subscriber & publisher
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_points_cloud_;
