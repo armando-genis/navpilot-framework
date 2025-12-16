@@ -1,0 +1,145 @@
+[0.000000] (-) TimerEvent: {}
+[0.000267] (-) JobUnselected: {'identifier': 'lanelet2'}
+[0.000310] (-) JobUnselected: {'identifier': 'lanelet2_core'}
+[0.000327] (-) JobUnselected: {'identifier': 'lanelet2_examples'}
+[0.000340] (-) JobUnselected: {'identifier': 'lanelet2_io'}
+[0.000353] (-) JobUnselected: {'identifier': 'lanelet2_maps'}
+[0.000366] (-) JobUnselected: {'identifier': 'lanelet2_matching'}
+[0.000378] (-) JobUnselected: {'identifier': 'lanelet2_projection'}
+[0.000390] (-) JobUnselected: {'identifier': 'lanelet2_python'}
+[0.000403] (-) JobUnselected: {'identifier': 'lanelet2_routing'}
+[0.000415] (-) JobUnselected: {'identifier': 'lanelet2_traffic_rules'}
+[0.000427] (-) JobUnselected: {'identifier': 'lanelet2_validation'}
+[0.000439] (-) JobUnselected: {'identifier': 'lidar_imu_sync'}
+[0.000476] (-) JobUnselected: {'identifier': 'local_path_planning'}
+[0.000517] (-) JobUnselected: {'identifier': 'map_visualizer'}
+[0.000530] (-) JobUnselected: {'identifier': 'obstacles_information_msgs'}
+[0.000542] (-) JobUnselected: {'identifier': 'path_planning_dynamic'}
+[0.000554] (-) JobUnselected: {'identifier': 'pointcloud_clustering'}
+[0.000566] (-) JobUnselected: {'identifier': 'pointcloud_rotation'}
+[0.000578] (-) JobUnselected: {'identifier': 'polygon_demos'}
+[0.000590] (-) JobUnselected: {'identifier': 'polygon_msgs'}
+[0.000601] (-) JobUnselected: {'identifier': 'polygon_rviz_plugins'}
+[0.000613] (-) JobUnselected: {'identifier': 'polygon_utils'}
+[0.000625] (-) JobUnselected: {'identifier': 'robot_description'}
+[0.000637] (-) JobUnselected: {'identifier': 'sensors_launch'}
+[0.000649] (-) JobUnselected: {'identifier': 'traffic_information_msgs'}
+[0.000661] (-) JobUnselected: {'identifier': 'yaw_test'}
+[0.000674] (waypoints_routing) JobQueued: {'identifier': 'waypoints_routing', 'dependencies': OrderedDict()}
+[0.000690] (waypoints_routing) JobStarted: {'identifier': 'waypoints_routing'}
+[0.006817] (waypoints_routing) JobProgress: {'identifier': 'waypoints_routing', 'progress': 'cmake'}
+[0.007215] (waypoints_routing) Command: {'cmd': ['/usr/bin/cmake', '/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing', '-DCMAKE_INSTALL_PREFIX=/home/snorlix/navpilot-framework/install/waypoints_routing'], 'cwd': '/home/snorlix/navpilot-framework/build/waypoints_routing', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('USER', 'snorlix'), ('LC_TIME', 'es_MX.UTF-8'), ('XDG_SESSION_TYPE', 'x11'), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/home/snorlix/colcon_ws/install/slam_sim/lib:/home/snorlix/colcon_ws/install/path_planning_dynamic/lib:/home/snorlix/colcon_ws/install/fast_lio/lib:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/home/snorlix'), ('OLDPWD', '/home/snorlix'), ('DESKTOP_SESSION', 'ubuntu-xorg'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('LC_MONETARY', 'es_MX.UTF-8'), ('SYSTEMD_EXEC_PID', '2134'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('WITH_DEEP_CAM', 'False'), ('COLCON_PREFIX_PATH', '/home/snorlix/colcon_ws/install:/home/snorlix/colcon_ws/src/ws_livox/install'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'snorlix'), ('LIDAR_MODEL', 'pacecat'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('XDG_SESSION_CLASS', 'user'), ('USERNAME', 'snorlix'), ('TERM', 'xterm-256color'), ('GAZEBO_MODEL_PATH', '/home/snorlix/.ignition/models'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/home/snorlix/colcon_ws/install/ndt_omp_ros2/bin:/opt/ros/humble/bin:/home/snorlix/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin'), ('SESSION_MANAGER', 'local/snorlix-ASUS-TUF-Gaming-F15-FX506LH-FX506LH:@/tmp/.ICE-unix/1862,unix/snorlix-ASUS-TUF-Gaming-F15-FX506LH-FX506LH:/tmp/.ICE-unix/1862'), ('ROBOT_MODEL', 'pickin'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'es_MX.UTF-8'), ('GNOME_TERMINAL_SCREEN', '/org/gnome/Terminal/screen/df942bac_9d1c_4c25_96fb_088a59e1f651'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('DISPLAY', ':0'), ('LANG', 'en_US'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('LC_TELEPHONE', 'es_MX.UTF-8'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu-xorg'), ('XAUTHORITY', '/run/user/1000/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('GNOME_TERMINAL_SERVICE', ':1.104'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('ROS_DOMAIN_ID', '30'), ('AMENT_PREFIX_PATH', '/home/snorlix/colcon_ws/install/slam_sim:/home/snorlix/colcon_ws/install/path_planning_dynamic:/home/snorlix/colcon_ws/install/ndt_omp_ros2:/home/snorlix/colcon_ws/install/fast_lio:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2:/opt/ros/humble'), ('SHELL', '/bin/bash'), ('LC_NAME', 'es_MX.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu-xorg'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('IGN_GAZEBO_RESOURCE_PATH', '/home/snorlix/.ignition/models'), ('LC_MEASUREMENT', 'es_MX.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1000/gnupg/S.gpg-agent:0:1'), ('GAZEBO_RESOURCE_PATH', '/home/snorlix/.ignition/models'), ('LC_IDENTIFICATION', 'es_MX.UTF-8'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/snorlix/navpilot-framework/build/waypoints_routing'), ('TURTLEBOT3_MODEL', 'burger'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu-xorg:/etc/xdg'), ('XDG_DATA_DIRS', '/usr/share/ubuntu-xorg:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/snorlix/colcon_ws/install/slam_sim/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/install/path_planning_dynamic/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/install/fast_lio/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'es_MX.UTF-8'), ('LC_PAPER', 'es_MX.UTF-8'), ('COLCON', '1'), ('VTE_VERSION', '6800'), ('CMAKE_PREFIX_PATH', '/home/snorlix/colcon_ws/install/slam_sim:/home/snorlix/colcon_ws/install/path_planning_dynamic:/home/snorlix/colcon_ws/install/ndt_omp_ros2:/home/snorlix/colcon_ws/install/fast_lio:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2:/opt/ros/humble')]), 'shell': False}
+[0.048018] (waypoints_routing) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.093124] (waypoints_routing) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.098982] (waypoints_routing) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.099439] (-) TimerEvent: {}
+[0.152277] (waypoints_routing) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.158867] (waypoints_routing) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.159045] (waypoints_routing) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.159342] (waypoints_routing) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.161804] (waypoints_routing) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.199537] (-) TimerEvent: {}
+[0.221539] (waypoints_routing) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.229754] (waypoints_routing) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.229953] (waypoints_routing) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.230571] (waypoints_routing) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.233079] (waypoints_routing) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.299615] (-) TimerEvent: {}
+[0.399819] (-) TimerEvent: {}
+[0.500052] (-) TimerEvent: {}
+[0.600294] (-) TimerEvent: {}
+[0.700500] (-) TimerEvent: {}
+[0.800841] (-) TimerEvent: {}
+[0.901221] (-) TimerEvent: {}
+[1.001531] (-) TimerEvent: {}
+[1.101787] (-) TimerEvent: {}
+[1.202070] (-) TimerEvent: {}
+[1.302335] (-) TimerEvent: {}
+[1.402628] (-) TimerEvent: {}
+[1.462898] (waypoints_routing) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[1.502747] (-) TimerEvent: {}
+[1.603028] (-) TimerEvent: {}
+[1.665501] (waypoints_routing) StdoutLine: {'line': b'-- Found rclcpp: 16.0.15 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[1.701263] (waypoints_routing) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[1.703125] (-) TimerEvent: {}
+[1.706001] (waypoints_routing) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[1.713038] (waypoints_routing) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[1.723108] (waypoints_routing) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[1.737257] (waypoints_routing) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[1.774739] (waypoints_routing) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[1.777346] (waypoints_routing) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.9 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[1.803266] (-) TimerEvent: {}
+[1.845298] (waypoints_routing) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[1.867647] (waypoints_routing) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[1.900379] (waypoints_routing) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[1.903362] (-) TimerEvent: {}
+[1.908087] (waypoints_routing) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[1.962375] (waypoints_routing) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[1.962935] (waypoints_routing) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[2.003475] (-) TimerEvent: {}
+[2.022355] (waypoints_routing) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[2.023628] (waypoints_routing) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[2.068506] (waypoints_routing) StdoutLine: {'line': b'-- Found visualization_msgs: 4.9.0 (/opt/ros/humble/share/visualization_msgs/cmake)\n'}
+[2.103580] (-) TimerEvent: {}
+[2.113213] (waypoints_routing) StdoutLine: {'line': b'-- Found eigen3_cmake_module: 0.1.1 (/opt/ros/humble/share/eigen3_cmake_module/cmake)\n'}
+[2.118044] (waypoints_routing) StdoutLine: {'line': b'-- Found Eigen3: TRUE (found version "5.0.1") \n'}
+[2.121784] (waypoints_routing) StdoutLine: {'line': b'-- Found mrt_cmake_modules: 1.0.11 (/opt/ros/humble/share/mrt_cmake_modules/cmake)\n'}
+[2.126195] (waypoints_routing) StdoutLine: {'line': b'-- Found Eigen3: TRUE  \n'}
+[2.190108] (waypoints_routing) StdoutLine: {'line': b'-- Found Boost: /usr/lib/x86_64-linux-gnu/cmake/Boost-1.74.0/BoostConfig.cmake (found version "1.74.0") found components: wserialization thread random serialization log_setup prg_exec_monitor wave system chrono filesystem locale timer date_time regex graph program_options unit_test_framework log atomic iostreams \n'}
+[2.203673] (-) TimerEvent: {}
+[2.303956] (-) TimerEvent: {}
+[2.373179] (waypoints_routing) StdoutLine: {'line': b'-- Found OpenMP_C: -fopenmp (found version "4.5") \n'}
+[2.404046] (-) TimerEvent: {}
+[2.444235] (waypoints_routing) StdoutLine: {'line': b'-- Found OpenMP_CXX: -fopenmp (found version "4.5") \n'}
+[2.444440] (waypoints_routing) StdoutLine: {'line': b'-- Found OpenMP: TRUE (found version "4.5")  \n'}
+[2.449087] (waypoints_routing) StdoutLine: {'line': b'-- Found pugixml: /usr/lib/x86_64-linux-gnu/libpugixml.so  \n'}
+[2.456870] (waypoints_routing) StdoutLine: {'line': b'-- Found PkgConfig: /usr/bin/pkg-config (found version "0.29.2") \n'}
+[2.458733] (waypoints_routing) StdoutLine: {'line': b'-- Found GeographicLib: /usr/lib/x86_64-linux-gnu/libGeographic.so  \n'}
+[2.468954] (waypoints_routing) StdoutLine: {'line': b'-- Found polygon_msgs: 1.2.0 (/opt/ros/humble/share/polygon_msgs/cmake)\n'}
+[2.480314] (waypoints_routing) StdoutLine: {'line': b'-- Found tf2_ros: 0.25.16 (/opt/ros/humble/share/tf2_ros/cmake)\n'}
+[2.504148] (-) TimerEvent: {}
+[2.566797] (waypoints_routing) StdoutLine: {'line': b'-- Found ament_lint_auto: 0.12.14 (/opt/ros/humble/share/ament_lint_auto/cmake)\n'}
+[2.604246] (-) TimerEvent: {}
+[2.704574] (-) TimerEvent: {}
+[2.803050] (waypoints_routing) StderrLine: {'line': b'\x1b[0m=============================================================\x1b[0m\n'}
+[2.803215] (waypoints_routing) StderrLine: {'line': b'\x1b[0m-- ROS Found. ROS Support is turned ON.\x1b[0m\n'}
+[2.803306] (waypoints_routing) StderrLine: {'line': b'\x1b[0m=============================================================\x1b[0m\n'}
+[2.804647] (-) TimerEvent: {}
+[2.807313] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'cppcheck' to perform static code analysis on C / C++ code\n"}
+[2.807546] (waypoints_routing) StdoutLine: {'line': b'-- Configured cppcheck include dirs: $<BUILD_INTERFACE:/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/include>\n'}
+[2.807672] (waypoints_routing) StdoutLine: {'line': b'-- Configured cppcheck exclude dirs and/or files: \n'}
+[2.808288] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'flake8' to check Python code syntax and style conventions\n"}
+[2.808875] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'lint_cmake' to check CMake code style\n"}
+[2.809588] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257\n"}
+[2.810458] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'uncrustify' to check C / C++ code style\n"}
+[2.810592] (waypoints_routing) StdoutLine: {'line': b'-- Configured uncrustify additional arguments: \n'}
+[2.811227] (waypoints_routing) StdoutLine: {'line': b"-- Added test 'xmllint' to check XML markup files\n"}
+[2.812345] (waypoints_routing) StdoutLine: {'line': b'-- Configuring done\n'}
+[2.826184] (waypoints_routing) StdoutLine: {'line': b'-- Generating done\n'}
+[2.831305] (waypoints_routing) StdoutLine: {'line': b'-- Build files have been written to: /home/snorlix/navpilot-framework/build/waypoints_routing\n'}
+[2.843967] (waypoints_routing) CommandEnded: {'returncode': 0}
+[2.844576] (waypoints_routing) JobProgress: {'identifier': 'waypoints_routing', 'progress': 'build'}
+[2.845267] (waypoints_routing) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/snorlix/navpilot-framework/build/waypoints_routing', '--', '-j8', '-l8'], 'cwd': '/home/snorlix/navpilot-framework/build/waypoints_routing', 'env': OrderedDict([('LESSOPEN', '| /usr/bin/lesspipe %s'), ('USER', 'snorlix'), ('LC_TIME', 'es_MX.UTF-8'), ('XDG_SESSION_TYPE', 'x11'), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/home/snorlix/colcon_ws/install/slam_sim/lib:/home/snorlix/colcon_ws/install/path_planning_dynamic/lib:/home/snorlix/colcon_ws/install/fast_lio/lib:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/home/snorlix'), ('OLDPWD', '/home/snorlix'), ('DESKTOP_SESSION', 'ubuntu-xorg'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('LC_MONETARY', 'es_MX.UTF-8'), ('SYSTEMD_EXEC_PID', '2134'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('WITH_DEEP_CAM', 'False'), ('COLCON_PREFIX_PATH', '/home/snorlix/colcon_ws/install:/home/snorlix/colcon_ws/src/ws_livox/install'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'snorlix'), ('LIDAR_MODEL', 'pacecat'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('XDG_SESSION_CLASS', 'user'), ('USERNAME', 'snorlix'), ('TERM', 'xterm-256color'), ('GAZEBO_MODEL_PATH', '/home/snorlix/.ignition/models'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/home/snorlix/colcon_ws/install/ndt_omp_ros2/bin:/opt/ros/humble/bin:/home/snorlix/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin'), ('SESSION_MANAGER', 'local/snorlix-ASUS-TUF-Gaming-F15-FX506LH-FX506LH:@/tmp/.ICE-unix/1862,unix/snorlix-ASUS-TUF-Gaming-F15-FX506LH-FX506LH:/tmp/.ICE-unix/1862'), ('ROBOT_MODEL', 'pickin'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'es_MX.UTF-8'), ('GNOME_TERMINAL_SCREEN', '/org/gnome/Terminal/screen/df942bac_9d1c_4c25_96fb_088a59e1f651'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('DISPLAY', ':0'), ('LANG', 'en_US'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('LC_TELEPHONE', 'es_MX.UTF-8'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu-xorg'), ('XAUTHORITY', '/run/user/1000/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('GNOME_TERMINAL_SERVICE', ':1.104'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('ROS_DOMAIN_ID', '30'), ('AMENT_PREFIX_PATH', '/home/snorlix/colcon_ws/install/slam_sim:/home/snorlix/colcon_ws/install/path_planning_dynamic:/home/snorlix/colcon_ws/install/ndt_omp_ros2:/home/snorlix/colcon_ws/install/fast_lio:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2:/opt/ros/humble'), ('SHELL', '/bin/bash'), ('LC_NAME', 'es_MX.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu-xorg'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('IGN_GAZEBO_RESOURCE_PATH', '/home/snorlix/.ignition/models'), ('LC_MEASUREMENT', 'es_MX.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1000/gnupg/S.gpg-agent:0:1'), ('GAZEBO_RESOURCE_PATH', '/home/snorlix/.ignition/models'), ('LC_IDENTIFICATION', 'es_MX.UTF-8'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/snorlix/navpilot-framework/build/waypoints_routing'), ('TURTLEBOT3_MODEL', 'burger'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu-xorg:/etc/xdg'), ('XDG_DATA_DIRS', '/usr/share/ubuntu-xorg:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/snorlix/colcon_ws/install/slam_sim/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/install/path_planning_dynamic/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/install/fast_lio/local/lib/python3.10/dist-packages:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'es_MX.UTF-8'), ('LC_PAPER', 'es_MX.UTF-8'), ('COLCON', '1'), ('VTE_VERSION', '6800'), ('CMAKE_PREFIX_PATH', '/home/snorlix/colcon_ws/install/slam_sim:/home/snorlix/colcon_ws/install/path_planning_dynamic:/home/snorlix/colcon_ws/install/ndt_omp_ros2:/home/snorlix/colcon_ws/install/fast_lio:/home/snorlix/colcon_ws/src/ws_livox/install/livox_ros_driver2:/opt/ros/humble')]), 'shell': False}
+[2.886719] (waypoints_routing) StdoutLine: {'line': b'[ 50%] \x1b[32mBuilding CXX object CMakeFiles/waypoints_routing_node.dir/src/waypoints_routing.cpp.o\x1b[0m\n'}
+[2.904759] (-) TimerEvent: {}
+[3.005072] (-) TimerEvent: {}
+[3.105422] (-) TimerEvent: {}
+[3.202459] (waypoints_routing) StderrLine: {'line': b'In file included from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/primitives/LineString.h:5\x1b[m\x1b[K,\n'}
+[3.202645] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/primitives/CompoundLineString.h:5\x1b[m\x1b[K,\n'}
+[3.202704] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/primitives/CompoundPolygon.h:2\x1b[m\x1b[K,\n'}
+[3.202751] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/primitives/Area.h:10\x1b[m\x1b[K,\n'}
+[3.202797] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/LaneletMap.h:6\x1b[m\x1b[K,\n'}
+[3.202841] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_io/Io.h:2\x1b[m\x1b[K,\n'}
+[3.202886] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/include/waypoints_routing.h:8\x1b[m\x1b[K,\n'}
+[3.202939] (waypoints_routing) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/src/waypoints_routing.cpp:1\x1b[m\x1b[K:\n'}
+[3.202986] (waypoints_routing) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/lanelet2_core/primitives/BoundingBox.h:8:10:\x1b[m\x1b[K \x1b[01;31m\x1b[Kfatal error: \x1b[m\x1b[KEigen/Geometry: No such file or directory\n'}
+[3.203030] (waypoints_routing) StderrLine: {'line': b'    8 | #include \x1b[01;31m\x1b[K<Eigen/Geometry>\x1b[m\x1b[K\n'}
+[3.203080] (waypoints_routing) StderrLine: {'line': b'      |          \x1b[01;31m\x1b[K^~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[3.203122] (waypoints_routing) StderrLine: {'line': b'compilation terminated.\n'}
+[3.205508] (-) TimerEvent: {}
+[3.206596] (waypoints_routing) StderrLine: {'line': b'gmake[2]: *** [CMakeFiles/waypoints_routing_node.dir/build.make:76: CMakeFiles/waypoints_routing_node.dir/src/waypoints_routing.cpp.o] Error 1\n'}
+[3.206799] (waypoints_routing) StderrLine: {'line': b'gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/waypoints_routing_node.dir/all] Error 2\n'}
+[3.206927] (waypoints_routing) StderrLine: {'line': b'gmake: *** [Makefile:146: all] Error 2\n'}
+[3.209010] (waypoints_routing) CommandEnded: {'returncode': 2}
+[3.218249] (waypoints_routing) JobEnded: {'identifier': 'waypoints_routing', 'rc': 2}
+[3.229017] (-) EventReactorShutdown: {}

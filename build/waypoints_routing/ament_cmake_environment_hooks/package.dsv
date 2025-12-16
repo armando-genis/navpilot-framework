@@ -1,0 +1,4 @@
+source;share/waypoints_routing/local_setup.bash
+source;share/waypoints_routing/local_setup.dsv
+source;share/waypoints_routing/local_setup.sh
+source;share/waypoints_routing/local_setup.zsh

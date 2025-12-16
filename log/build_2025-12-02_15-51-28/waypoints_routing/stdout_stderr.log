@@ -1,0 +1,76 @@
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+-- Found rclcpp: 16.0.15 (/opt/ros/humble/share/rclcpp/cmake)
+-- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+-- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)
+-- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+-- Found rmw_fastrtps_cpp: 6.2.9 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  
+-- Found FastRTPS: /opt/ros/humble/include  
+-- Using RMW implementation 'rmw_fastrtps_cpp' as default
+-- Looking for pthread.h
+-- Looking for pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Found visualization_msgs: 4.9.0 (/opt/ros/humble/share/visualization_msgs/cmake)
+-- Found eigen3_cmake_module: 0.1.1 (/opt/ros/humble/share/eigen3_cmake_module/cmake)
+-- Found Eigen3: TRUE (found version "5.0.1") 
+-- Found mrt_cmake_modules: 1.0.11 (/opt/ros/humble/share/mrt_cmake_modules/cmake)
+-- Found Eigen3: TRUE  
+-- Found Boost: /usr/lib/x86_64-linux-gnu/cmake/Boost-1.74.0/BoostConfig.cmake (found version "1.74.0") found components: wserialization thread random serialization log_setup prg_exec_monitor wave system chrono filesystem locale timer date_time regex graph program_options unit_test_framework log atomic iostreams 
+-- Found OpenMP_C: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Found pugixml: /usr/lib/x86_64-linux-gnu/libpugixml.so  
+-- Found PkgConfig: /usr/bin/pkg-config (found version "0.29.2") 
+-- Found GeographicLib: /usr/lib/x86_64-linux-gnu/libGeographic.so  
+-- Found polygon_msgs: 1.2.0 (/opt/ros/humble/share/polygon_msgs/cmake)
+-- Found tf2_ros: 0.25.16 (/opt/ros/humble/share/tf2_ros/cmake)
+-- Found ament_lint_auto: 0.12.14 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[0m=============================================================[0m
+[0m-- ROS Found. ROS Support is turned ON.[0m
+[0m=============================================================[0m
+-- Added test 'cppcheck' to perform static code analysis on C / C++ code
+-- Configured cppcheck include dirs: $<BUILD_INTERFACE:/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/include>
+-- Configured cppcheck exclude dirs and/or files: 
+-- Added test 'flake8' to check Python code syntax and style conventions
+-- Added test 'lint_cmake' to check CMake code style
+-- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257
+-- Added test 'uncrustify' to check C / C++ code style
+-- Configured uncrustify additional arguments: 
+-- Added test 'xmllint' to check XML markup files
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/snorlix/navpilot-framework/build/waypoints_routing
+[ 50%] [32mBuilding CXX object CMakeFiles/waypoints_routing_node.dir/src/waypoints_routing.cpp.o[0m
+In file included from [01m[K/opt/ros/humble/include/lanelet2_core/primitives/LineString.h:5[m[K,
+                 from [01m[K/opt/ros/humble/include/lanelet2_core/primitives/CompoundLineString.h:5[m[K,
+                 from [01m[K/opt/ros/humble/include/lanelet2_core/primitives/CompoundPolygon.h:2[m[K,
+                 from [01m[K/opt/ros/humble/include/lanelet2_core/primitives/Area.h:10[m[K,
+                 from [01m[K/opt/ros/humble/include/lanelet2_core/LaneletMap.h:6[m[K,
+                 from [01m[K/opt/ros/humble/include/lanelet2_io/Io.h:2[m[K,
+                 from [01m[K/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/include/waypoints_routing.h:8[m[K,
+                 from [01m[K/home/snorlix/navpilot-framework/workspace/navpilot_ws/src/hdmap_stack/waypoints_routing/src/waypoints_routing.cpp:1[m[K:
+[01m[K/opt/ros/humble/include/lanelet2_core/primitives/BoundingBox.h:8:10:[m[K [01;31m[Kfatal error: [m[KEigen/Geometry: No such file or directory
+    8 | #include [01;31m[K<Eigen/Geometry>[m[K
+      |          [01;31m[K^~~~~~~~~~~~~~~~[m[K
+compilation terminated.
+gmake[2]: *** [CMakeFiles/waypoints_routing_node.dir/build.make:76: CMakeFiles/waypoints_routing_node.dir/src/waypoints_routing.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/waypoints_routing_node.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

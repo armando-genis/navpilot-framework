@@ -1,0 +1,19 @@
+[31mCMake Error at CMakeLists.txt:19 (find_package):
+  By not providing "Findobstacles_information_msgs.cmake" in
+  CMAKE_MODULE_PATH this project has asked CMake to find a package
+  configuration file provided by "obstacles_information_msgs", but CMake did
+  not find one.
+
+  Could not find a package configuration file provided by
+  "obstacles_information_msgs" with any of the following names:
+
+    obstacles_information_msgsConfig.cmake
+    obstacles_information_msgs-config.cmake
+
+  Add the installation prefix of "obstacles_information_msgs" to
+  CMAKE_PREFIX_PATH or set "obstacles_information_msgs_DIR" to a directory
+  containing one of the above files.  If "obstacles_information_msgs"
+  provides a separate development package or SDK, be sure it has been
+  installed.
+
+[0m
