@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>multisensor_calibration</name>
+  <version>2.0.4</version>
+  <description>
+    Collection of methods and applications to calibrate multi-sensor-systems, e.g.
+    camera to LiDAR, LiDAR to LiDAR, and LiDAR to vehicle. 
+  </description>
+
+  <maintainer email="miguel.granero@iosb.fraunhofer.de">Miguel Granero</maintainer>
+
+  <license>BSD</license>
+  <author>Boitumelo Ruf</author>
+  <author>Miguel Granero</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>qtbase5-dev</build_depend>
+  <build_depend>qt5-qmake</build_depend>
+
+  <exec_depend>libqt5-core</exec_depend>
+  <exec_depend>libqt5-gui</exec_depend>
+  <exec_depend>libqt5-widgets</exec_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tinyxml2</depend>
+  <depend>urdf</depend>
+  <depend>rviz_common</depend>
+  <depend>multisensor_calibration_interface</depend>
+
+  <depend>small_gicp_vendor</depend>
+
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+
+</package>

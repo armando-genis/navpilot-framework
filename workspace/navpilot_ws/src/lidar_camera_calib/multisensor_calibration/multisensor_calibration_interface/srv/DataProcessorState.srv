@@ -1,0 +1,13 @@
+########################################################################
+#
+#   Copyright (c) 2022 - 2024 Fraunhofer Institute of Optronics,
+#   System Technologies and Image Exploitation IOSB
+#
+########################################################################
+
+---
+# Flag indicating if data processor is initialized
+bool is_initialized
+
+# Frame id of data it processes
+string frame_id

@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/icons8-board-32.png</file>
+        <file>icons/icons8-add-file-26.png</file>
+        <file>icons/icons8-add-list-30.png</file>
+        <file>icons/icons8-opened-folder-26.png</file>
+        <file>icons/icons8-pro-display-xdr-48-filled.png</file>
+        <file>icons/icons8-pro-display-xdr-48.png</file>
+        <file>icons/icons8-sensor-100.png</file>
+        <file>icons/icons8-sensor-100_filled.png</file>
+    </qresource>
+</RCC>

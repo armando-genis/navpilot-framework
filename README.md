@@ -148,6 +148,7 @@ ros2 launch /workspace/navpilot_ws/src/path_planning/launch/localization.launch.
 /workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm
 
 /workspace/models/sdv.glb
+/workspace/models/hallowen.glb
 
 /workspace/models/formula_uno_car_rot.glb
 

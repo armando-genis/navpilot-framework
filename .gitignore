@@ -4,6 +4,11 @@
 /workspace/ros2-gl-viewer/
 /workspace/ros2-gl-viewer-old-version/
 
+/workspace/navpilot_ws/rosbags/**
+/workspace/navpilot_ws/TeraSim/**
+workspace/rosbags/**
+workspace/TeraSim/**
+
 /workspace/vanttec_sdv_localization_20250623/
 /workspace/sdv_localization_obstacles_paths/
 /workspace/sdv_localization_obstacles/
@@ -29,8 +34,6 @@
 /workspace/navpilot_ws/callejon/
 /workspace/navpilot_ws/tinyspline/
 
-
-
 workspace/oms/floor_low_density.pcd
 workspace/oms/rosbag2_2025_09_01-01_47_35/
 
@@ -41,16 +44,22 @@ workspace/Optimal-Trajectory-Generation-in-Frenet-Frame/
 /workspace/navpilot_ws/src/mcap_reader/output_callejon_filtered.mcap/
 
 
-/workspace/models/
+/workspace/models/**
 
-/workspace/oct-8-street2/
-/workspace/oct_8_1am/
+
 
 /workspace/navpilot_ws/street_tec_localization/
 /workspace/navpilot_ws/street_tec_localization_path/
 /workspace/navpilot_ws/sdv_localization_obstacles_paths/
 /workspace/navpilot_ws/sdv_localization_obstacles/
 /workspace/navpilot_ws/src/pc2_to_bin/bins_streets/
+
+/workspace/DistroPoint/
+/workspace/DistroPointclouds/
+
+
+
+
 
 
 

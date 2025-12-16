@@ -99,11 +99,11 @@ def generate_launch_description():
     )
 
 
-    rviz = launch_ros.actions.Node(
-        package='rviz2',
-        executable='rviz2',
-        arguments=['-d', rviz_param_dir]
-    )
+    # rviz = launch_ros.actions.Node(
+    #     package='rviz2',
+    #     executable='rviz2',
+    #     arguments=['-d', rviz_param_dir]
+    # )
 
     ld.add_action(robot_launch)
     ld.add_action(from_unconfigured_to_inactive)
@@ -111,6 +111,6 @@ def generate_launch_description():
     ld.add_action(publisher_node_rotation)
     ld.add_action(lidar_localization)
     ld.add_action(to_inactive)
-    ld.add_action(rviz)
+    # ld.add_action(rviz)
 
     return ld

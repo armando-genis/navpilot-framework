@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RCC>
+    <qresource prefix="/">
+        <file>robot_workspaces/example/stereo_camera_left_ouster_left_extrinsic_calibration/settings.ini</file>
+        <file>robot_workspaces/example/ouster_right_ouster_left_extrinsic_calibration/settings.ini</file>
+        <file>robot_workspaces/example/ouster_left_reference_extrinsic_calibration/settings.ini</file>
+        <file>robot_workspaces/example/settings.ini</file>
+    </qresource>
+</RCC>

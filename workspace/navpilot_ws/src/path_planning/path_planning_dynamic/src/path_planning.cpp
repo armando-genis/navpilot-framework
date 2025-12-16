@@ -306,6 +306,8 @@ void path_planning::publishGlobalPlannerOccupancyGrid()
     std::cout << green << "Grid size: " << global_planner_occupancy_grid_.info.width << "x" 
                 << global_planner_occupancy_grid_.info.height << ", resolution: " 
                 << global_planner_occupancy_grid_.info.resolution << reset << std::endl;
+
+    // 
     
     global_planner_occupancy_grid_publisher_->publish(global_planner_occupancy_grid_);
 
@@ -355,6 +357,8 @@ cv::Mat path_planning::rescaleChunk(const cv::Mat &chunk_mat, double scale_facto
 
 void path_planning::map_combination(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg)
 {
+    // print the obstacle collection size
+    std::cout << green << "Obstacle collection size: " << msg->obstacles.size() << reset << std::endl;
 
     auto init_time = std::chrono::system_clock::now();
     // clean the rescaled_chunk_
@@ -647,8 +651,8 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
 
     TreeFlat flat_map;
     int best_map = generateTrajectoryTree_AStar_flat_map_with_waypoints(current_node->Current_state, flat_map);
-    publishBestPathFromFlat(flat_map, best_map, 2); // blue color for the A* implementation with waypoints
-    publishAllPathsFromFlat(flat_map); // publish all available paths
+    // publishBestPathFromFlat(flat_map, best_map, 2); // blue color for the A* implementation with waypoints
+    // publishAllPathsFromFlat(flat_map); // publish all available paths
     publishTrajectoryPath(flat_map, best_map); // publish chosen trajectory as nav_msgs::Path
 
 

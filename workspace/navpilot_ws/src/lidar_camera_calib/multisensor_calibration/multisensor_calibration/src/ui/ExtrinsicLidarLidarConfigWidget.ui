@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>multisensor_calibration::ExtrinsicLidarLidarConfigWidget</class>
+ <widget class="QWidget" name="multisensor_calibration::ExtrinsicLidarLidarConfigWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+   <width>409</width>
+   <height>595</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>0</width>
+    <height>513</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>16777215</width>
+    <height>595</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="srcGroupBox">
+     <property name="title">
+      <string>Source LiDAR</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <property name="horizontalSpacing">
+       <number>32</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="srcNameLabel">
+        <property name="text">
+         <string>Sensor Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="srcNameComboBox">
+        <property name="toolTip">
+         <string>Select or enter the name of the source LiDAR sensor.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="srcCloudTopicLabel">
+        <property name="text">
+         <string>Point Cloud Topic:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="srcCloudTopicComboBox">
+        <property name="toolTip">
+         <string>Select or enter the topic name on which the point clouds are published.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="refGroupBox">
+     <property name="title">
+      <string>Reference LiDAR</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout_2">
+      <property name="horizontalSpacing">
+       <number>32</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="refNameLabel">
+        <property name="text">
+         <string>Sensor Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="refCloudTopicLabel">
+        <property name="text">
+         <string>Point Cloud Topic:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="refCloudTopicComboBox">
+        <property name="toolTip">
+         <string>Select or enter the topic name on which the point clouds are published.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="refNameComboBox">
+        <property name="toolTip">
+         <string>Select or enter the name of the reference LiDAR sensor.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="line">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="calibTargetWidget" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="MinimumExpanding" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>37</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>37</height>
+      </size>
+     </property>
+     <layout class="QFormLayout" name="formLayout_3">
+      <property name="horizontalSpacing">
+       <number>32</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="calibTargetFileLabel">
+        <property name="text">
+         <string>Calibration Target:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="calibTargetFileLineEdit">
+        <property name="toolTip">
+         <string>Configuration file of the calibration target.</string>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="alignGroundPlanesGroupBox">
+     <property name="toolTip">
+      <string>Set to true, to additionally align the ground planes in the sensor data. Additionally specify the upright frame ID.</string>
+     </property>
+     <property name="title">
+      <string>Additionally align ground planes?</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QFormLayout" name="formLayout_6">
+      <property name="horizontalSpacing">
+       <number>13</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="uprightFrameIdLabel">
+        <property name="text">
+         <string>Upright Frame ID:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="uprightFrameIdComboBox">
+        <property name="toolTip">
+         <string>ID of Frame which has an upwards pointing z-axis. Used to detect ground plane in sensor data.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="baseFrameGroupBox">
+     <property name="toolTip">
+      <string>Calibrate the pose of the source sensor with respect to a base frame.</string>
+     </property>
+     <property name="title">
+      <string>Calibrate with respect to base frame?</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <layout class="QFormLayout" name="formLayout_4">
+      <property name="horizontalSpacing">
+       <number>32</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="baseFrameLabel">
+        <property name="text">
+         <string>Base Frame ID:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="baseFrameComboBox">
+        <property name="toolTip">
+         <string>Select the frame ID of the base frame with respect to which the pose is to be calibrated.</string>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
+        </property>
+        <property name="sizeAdjustPolicy">
+         <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="initialGuessCheckBox">
+     <property name="toolTip">
+      <string>Use the data provided by the TF-Tree to extract an initial guess for the calibration.</string>
+     </property>
+     <property name="text">
+      <string>Use initial guess from TF-Tree?</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="observationsCheckBox">
+     <property name="toolTip">
+      <string>Save the observations which have been used for the calibration into the calibration workspace.</string>
+     </property>
+     <property name="text">
+      <string>Save observations?</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="line_2">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="synchronizatioGroupBox">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title">
+      <string>Message Synchronization</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout_5">
+      <property name="horizontalSpacing">
+       <number>32</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="syncPolicyLabel">
+        <property name="text">
+         <string>Policy:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="syncPolicyComboBox">
+        <property name="toolTip">
+         <string>Select which type of time synchronization is to be used to synchronize the sensor messages.</string>
+        </property>
+        <property name="currentIndex">
+         <number>1</number>
+        </property>
+        <item>
+         <property name="text">
+          <string>Exact Time Synchronization</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Approximate Time Synchronization</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="queueSizeLabel">
+        <property name="text">
+         <string>Queue Size:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="queueSizeSpinBox">
+        <property name="toolTip">
+         <string>Queue size used for the time synchronization.</string>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="buttonSymbols">
+         <enum>QAbstractSpinBox::UpDownArrows</enum>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>999</number>
+        </property>
+        <property name="singleStep">
+         <number>10</number>
+        </property>
+        <property name="value">
+         <number>100</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeType">
+      <enum>QSizePolicy::MinimumExpanding</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>0</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

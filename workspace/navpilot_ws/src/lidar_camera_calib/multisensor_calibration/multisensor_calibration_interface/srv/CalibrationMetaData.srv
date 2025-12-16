@@ -1,0 +1,43 @@
+########################################################################
+#
+#   Copyright (c) 2022 - 2024 Fraunhofer Institute of Optronics,
+#   System Technologies and Image Exploitation IOSB
+#
+########################################################################
+
+---
+# integer enumeration indicating the type of calibration
+int32 calib_type
+
+# path to robot workspace
+string robot_ws_path
+
+# path to calibration workspace
+string calib_ws_path
+
+# path to config file of calibration target
+string calib_target_file_path
+
+# Name of source sensor
+string src_sensor_name
+
+# Topic name of data source sensor
+string src_topic_name
+
+# Frame ID of data source sensor
+string src_frame_id
+
+# Name of reference sensor
+string ref_sensor_name
+
+# Topic name of data reference sensor
+string ref_topic_name
+
+# Frame ID of data reference sensor
+string ref_frame_id
+
+# Frame ID of base frame with respect to which the calibration is to be done
+string base_frame_id
+
+# Flag indicating if list is complete and, thus, if all meta data is available
+bool is_complete

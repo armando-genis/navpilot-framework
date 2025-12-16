@@ -1,0 +1,18 @@
+########################################################################
+#
+#   Copyright (c) 2022 - 2024 Fraunhofer Institute of Optronics,
+#   System Technologies and Image Exploitation IOSB
+#
+########################################################################
+
+uint8 SENSOR_2_SENSOR = 0
+uint8 SENSOR_2_BASE_FRAME = 1
+
+# type of extrinsic to return
+# SENSOR_2_SENSOR: extrinsics between source and reference sensor
+# SENSOR_2_BASE_FRAME: extrinsics between source sensor and base frame. If latter is not available,
+# the SENSOR_2_SENSOR extrinsics is returned.
+uint8 extrinsic_type
+---
+# Extrinsics
+geometry_msgs/Pose extrinsics

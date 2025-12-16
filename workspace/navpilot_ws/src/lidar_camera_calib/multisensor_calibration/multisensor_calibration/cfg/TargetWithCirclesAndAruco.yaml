@@ -1,0 +1,27 @@
+%YAML:1.0
+board_width: 1.2        # width of board in meters
+board_height: 0.6       # height of board in meters
+marker_size: 0.18       # side length of aruco markers in meters
+marker_ids:             # ids of marker used as a single column matrix
+    rows: 4
+    cols: 1
+    dt: i
+    data: [1, 2, 3, 4]  # marker order goes clockwise, starting from top left of board
+marker_positions:       # x,y marker positions (top-left) on board relative to center, stored row-by-row in meters. x: rightwards, y: upwards
+    rows: 4
+    cols: 2
+    dt: f
+    data: [-0.55, 0.25,
+           0.37, 0.25,
+           0.37, -0.07,
+           -0.55, -0.07]
+cutouts:                # Cutouts (id + parameters) stored as a single row matrix. x: rightwards, y: upwards
+    rows: 1
+    cols: 12
+    dt: f
+    data: [1, 0.15, -0.15, 0.12,
+           1, -0.15, -0.15, 0.12,
+           1, 0.00,  0.15, 0.12]
+min_marker_detection: 2 # minimum number of markers that need to be detected.
+cad_model_mesh: "calibration_target_3holes_cad_mesh.ply" # relative file path to CAD model of the calibration target as mesh
+cad_model_cloud: "calibration_target_3holes_cad_cloud.ply" # relative file path to CAD model of the calibration target as cloud

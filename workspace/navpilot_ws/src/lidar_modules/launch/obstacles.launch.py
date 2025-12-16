@@ -29,7 +29,6 @@ def generate_launch_description():
     ld = launch.LaunchDescription()
 
     paramsConfig_cloud_clustering = os.path.join(current_dir, 'pointcloud_clustering.yaml')
-    paramsConfig_pointcloud_rotation = os.path.join(current_dir, 'rotation_params.yaml')
     # obstacle clustering
     publisher_node_cloud_clustering = launch_ros.actions.LifecycleNode(
         package='pointcloud_clustering',
@@ -41,16 +40,8 @@ def generate_launch_description():
         additional_env={'RCUTILS_CONSOLE_OUTPUT_FORMAT': "{message}"}
     )
 
-    publisher_node_pointcloud_rotation = launch_ros.actions.Node(
-        package='pointcloud_rotation',
-        executable='pointcloud_rotation_node',
-        name='pointcloud_rotation_node',
-        output='screen',
-        parameters=[paramsConfig_pointcloud_rotation],
-    )
+    ld.add_action(publisher_node_cloud_clustering)
 
-    # ld.add_action(publisher_node_cloud_clustering)
-    ld.add_action(publisher_node_pointcloud_rotation)
 
     return ld
 

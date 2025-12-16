@@ -1,0 +1,18 @@
+########################################################################
+#
+#   Copyright (c) 2022 - 2024 Fraunhofer Institute of Optronics,
+#   System Technologies and Image Exploitation IOSB
+#
+########################################################################
+
+# Frame ID of sensor to which the region belongs.
+string sensor_frame_id
+
+# Position of the marker as 3D point
+geometry_msgs/Point point
+---
+# Flag, if is accepted or not
+bool is_accepted
+
+# Response message
+string msg

@@ -1,9 +1,0 @@
-waypoints_routing_node:
-  ros__parameters:
-    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"
-    start_lanelet_id: 3848
-    end_lanelet_id: 31
-
-osm_visualizer:
-  ros__parameters:
-    map_path: "/workspace/navpilot_ws/src/hdmap_stack/hdmap_visualizer/osms/1_new66.osm"

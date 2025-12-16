@@ -1,0 +1,32 @@
+site_name: Multi-Sensor Calibration
+
+copyright:  Copyright 2024 - 2025 Fraunhofer IOSB and contributors
+theme:
+  name: readthedocs
+
+site_dir: html
+docs_dir: user_docs
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      toc_depth: 3
+      permalink: true
+
+repo_url: https://github.com/FraunhoferIOSB/multisensor_calibration
+repo_name: 'GitHub'
+edit_uri: https://github.com/FraunhoferIOSB/multisensor_calibration/blob/main/doc/user_docs/
+
+extra_javascript:
+  - js/tables.js
+  - js/mathjax.js
+  - js/tex-mml-chtml.js
+
+plugins:
+  - git-revision-date-localized
+  - search
+  - literate-nav:
+      nav_file: SUMMARY.md
+extra:
+  generator: false
