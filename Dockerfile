@@ -143,6 +143,8 @@ RUN apt-get update && \
         ros-${ROS_DISTRO}-velodyne-msgs \
         ros-${ROS_DISTRO}-vision-msgs \
         ros-${ROS_DISTRO}-vision-opencv \
+        ros-${ROS_DISTRO}-grid-map-ros \
+        ros-${ROS_DISTRO}-grid-map-cv \
         ros-${ROS_DISTRO}-xacro \
         ros-${ROS_DISTRO}-cv-bridge && \
         rm -rf /var/lib/apt/lists/*
