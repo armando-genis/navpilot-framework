@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(v4l2_camera)
+project(v4l2_Multicamera)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -23,30 +23,30 @@ pkg_check_modules(TURBOJPEG REQUIRED libturbojpeg)
 
 
 # --- CUDA option (manual toggle) ---
-option(ENABLE_CUDA "Build v4l2_camera with CUDA acceleration" OFF)
+option(ENABLE_CUDA "Build v4l2_Multicamera with CUDA acceleration" OFF)
 
 if(ENABLE_CUDA)
   find_package(CUDA QUIET)
 
   if(CUDA_FOUND)
     message(STATUS "CUDA Support is enabled in ${PROJECT_NAME}")
-    cuda_add_library(v4l2_camera
+    cuda_add_library(v4l2_Multicamera
       src/v4l2_camera.cpp
       src/v4l2_camera_device.cpp
     )
-    target_compile_definitions(v4l2_camera PUBLIC
+    target_compile_definitions(v4l2_Multicamera PUBLIC
       ENABLE_CUDA
     )
-    target_include_directories(v4l2_camera PUBLIC
+    target_include_directories(v4l2_Multicamera PUBLIC
       ${CUDA_INCLUDE_DIR}
     )
-    target_link_libraries(v4l2_camera
+    target_link_libraries(v4l2_Multicamera
       ${CUDA_nppicc_LIBRARY}
       ${CUDA_nppisu_LIBRARY}
     )
   else()
     message(WARNING "ENABLE_CUDA=ON but CUDA was not found. Building without CUDA.")
-    add_library(v4l2_camera
+    add_library(v4l2_Multicamera
       src/v4l2_camera.cpp
       src/v4l2_camera_device.cpp
     )
@@ -54,7 +54,7 @@ if(ENABLE_CUDA)
 
 else()
   message(STATUS "CUDA Support is disabled in ${PROJECT_NAME} (ENABLE_CUDA=OFF)")
-  add_library(v4l2_camera
+  add_library(v4l2_Multicamera
     src/v4l2_camera.cpp
     src/v4l2_camera_device.cpp
   )
@@ -62,57 +62,57 @@ endif()
 
 
 
-rclcpp_components_register_nodes(v4l2_camera "v4l2_camera::V4L2Camera")
+rclcpp_components_register_nodes(v4l2_Multicamera "v4l2_camera::V4L2Camera")
 
 
 
-target_include_directories(v4l2_camera PUBLIC
+target_include_directories(v4l2_Multicamera PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-target_include_directories(v4l2_camera PUBLIC ${TURBOJPEG_INCLUDE_DIRS})
+target_include_directories(v4l2_Multicamera PUBLIC ${TURBOJPEG_INCLUDE_DIRS})
 
-ament_target_dependencies(v4l2_camera
+ament_target_dependencies(v4l2_Multicamera
   "rclcpp"
   "rclcpp_components"
   "image_transport"
   "camera_info_manager"
   "diagnostic_updater")
 
-target_compile_options(v4l2_camera PRIVATE -Werror)
+target_compile_options(v4l2_Multicamera PRIVATE -Werror)
 
 # Causes the visibility macros to use dllexport rather than dllimport,
 # which is appropriate when building the dll but not consuming it.
-target_compile_definitions(v4l2_camera PRIVATE "V4L2_CAMERA_BUILDING_LIBRARY")
+target_compile_definitions(v4l2_Multicamera PRIVATE "V4L2_CAMERA_BUILDING_LIBRARY")
 
 install(
   DIRECTORY include/
   DESTINATION include
 )
 install(
-  TARGETS v4l2_camera
+  TARGETS v4l2_Multicamera
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-add_executable(v4l2_camera_node src/v4l2_camera_node.cpp)
-target_include_directories(v4l2_camera_node PUBLIC
+add_executable(v4l2_Multicamera_node src/v4l2_camera_node.cpp)
+target_include_directories(v4l2_Multicamera_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_link_libraries(v4l2_camera_node v4l2_camera)
-target_link_libraries(v4l2_camera ${TURBOJPEG_LIBRARIES})
-target_compile_options(v4l2_camera_node PRIVATE -Werror)
+target_link_libraries(v4l2_Multicamera_node v4l2_Multicamera)
+target_link_libraries(v4l2_Multicamera ${TURBOJPEG_LIBRARIES})
+target_compile_options(v4l2_Multicamera_node PRIVATE -Werror)
 
 add_executable(v4l2_camera_compose_test src/v4l2_camera_compose_test.cpp)
 target_include_directories(v4l2_camera_compose_test PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_link_libraries(v4l2_camera_compose_test v4l2_camera)
+target_link_libraries(v4l2_camera_compose_test v4l2_Multicamera)
 target_compile_options(v4l2_camera_compose_test PRIVATE -Werror)
 
-install(TARGETS v4l2_camera_node v4l2_camera_compose_test
+install(TARGETS v4l2_Multicamera_node v4l2_camera_compose_test
   EXPORT export_${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME})
 
@@ -129,7 +129,7 @@ ament_export_targets(
   export_${PROJECT_NAME}
 )
 ament_export_libraries(
-  v4l2_camera
+  v4l2_Multicamera
 )
 
 ament_export_dependencies(

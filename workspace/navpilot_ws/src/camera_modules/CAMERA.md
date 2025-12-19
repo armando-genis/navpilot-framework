@@ -231,7 +231,10 @@ git clone https://github.com/tier4/ros2_v4l2_camera
 To build the modified `v4l2_camera` package, use the following command:
 
 ```bash
-colcon build --packages-select v4l2_camera --cmake-clean-cache --cmake-args -DENABLE_CUDA=OFF
+colcon build --packages-select v4l2_singlecamera --cmake-clean-cache --cmake-args -DENABLE_CUDA=OFF
+
+colcon build --packages-select v4l2_Multicamera --cmake-clean-cache --cmake-args -DENABLE_CUDA=OFF
+
 ```
 
 **Note:** The `-DENABLE_CUDA=OFF` flag disables CUDA support. Remove this flag if you need CUDA acceleration for image processing.
