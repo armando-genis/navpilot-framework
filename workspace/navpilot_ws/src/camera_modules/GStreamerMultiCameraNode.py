@@ -5,6 +5,8 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
+show_image = True
+
 
 def usb_v4l2_pipeline(dev="/dev/video0", w=1280, h=720, fps=30):
     return (
@@ -34,6 +36,7 @@ class CameraPublisher(Node):
         super().__init__(name)
         self.bridge = CvBridge()
         self.pub = self.create_publisher(Image, topic, queue_size)
+        self.name = name
 
         self.fps = fps
         self.period_s = 1.0 / fps
@@ -52,6 +55,10 @@ class CameraPublisher(Node):
             self.get_logger().warn("Failed to read frame (pipeline starved?)")
             return
 
+        if show_image:
+            cv2.imshow(self.name, frame)
+            cv2.waitKey(1)
+
         msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         msg.header.stamp = self.get_clock().now().to_msg()
         self.pub.publish(msg)
@@ -60,6 +67,8 @@ class CameraPublisher(Node):
         try:
             if self.cap is not None:
                 self.cap.release()
+            if show_image:
+                cv2.destroyWindow(self.name)
         finally:
             super().destroy_node()
 
@@ -75,6 +84,11 @@ def main(args=None):
             "name": "obsbot",
             "topic": "racecar/camera/image_raw",
             "pipeline": obsbot_mjpg_pipeline("/dev/video0", w=1920, h=1080, fps=FPS),
+        },
+        {
+            "name": "obsbot2",
+            "topic": "racecar/camera/image_raw2",
+            "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=FPS),
         },
     ]
 

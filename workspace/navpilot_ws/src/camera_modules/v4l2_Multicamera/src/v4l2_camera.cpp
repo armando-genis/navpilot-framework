@@ -171,11 +171,28 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
   }
 
+  // Read video_devices_ early to check if we should use a device from it
+  std::vector<std::string> default_video_devices;
+  video_devices_ = this->declare_parameter<std::vector<std::string>>("video_devices", default_video_devices);
+  RCLCPP_INFO(get_logger(), "video_devices_ size: %zu", video_devices_.size());
+  for (size_t i = 0; i < video_devices_.size(); ++i) {
+    RCLCPP_INFO(get_logger(), "  video_devices_[%zu]: %s", i, video_devices_[i].c_str());
+  }
+
   // Prepare camera
   auto device_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
   device_descriptor.description = "Path to video device";
   device_descriptor.read_only = true;
-  auto device = declare_parameter<std::string>("video_device", "/dev/video0", device_descriptor);
+  
+  // If video_devices_ has exactly one device, use it instead of video_device
+  std::string device;
+  if (!video_devices_.empty() && video_devices_.size() == 1) {
+    device = video_devices_[0];
+    RCLCPP_INFO(get_logger(), "Using device from video_devices: %s", device.c_str());
+  } else {
+    device = declare_parameter<std::string>("video_device", "/dev/video0", device_descriptor);
+    RCLCPP_INFO(get_logger(), "Using device from video_device parameter: %s", device.c_str());
+  }
 
   auto use_v4l2_buffer_timestamps_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
   use_v4l2_buffer_timestamps_descriptor.description = "Use v4l2 buffer timestamps";
@@ -277,8 +294,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
           target_frequency = diag_publish_rate;
         } else {
           // time_per_frame_ may not equal to the actual frame rate. In this
-          // case, time_per_frame_ commonly represents the maximum frequency of
-          // the device.
+          // case, time_per_frame_ commonly represents the maximum frequency of the device.
           double device_reported_frequency =
               static_cast<double>(time_per_frame_.value()[1]) / time_per_frame_.value()[0];
           target_frequency = std::min(diag_publish_rate, device_reported_frequency);
@@ -402,9 +418,7 @@ V4L2Camera::~V4L2Camera()
 
 void V4L2Camera::createParameters()
 {
-  std::vector<std::string> default_video_devices;
-  video_devices_ = this->declare_parameter<std::vector<std::string>>("video_devices", default_video_devices);
-
+  // video_devices_ is already declared and set in the constructor, so we don't redeclare it here
   sync_tolerance_ns_ = static_cast<uint64_t>(this->declare_parameter<int64_t>("sync_tolerance_ns", 10'000'000));
 
   max_queue_ = static_cast<size_t>(this->declare_parameter<int64_t>("max_queue", 10));

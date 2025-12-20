@@ -12,7 +12,7 @@ def generate_launch_description():
             parameters=[
                 # Multi-camera mode: provide list of video devices
                 # If you have more than one device, multi-camera mode will be activated
-                {"video_devices": ["/dev/video0"]},  # Add more devices as needed
+                {"video_devices": ["/dev/video0", "/dev/video2"]},  # Add more devices as needed
                 
                 # Optional: synchronization settings (defaults shown)
                 {"sync_tolerance_ns": 10000000},  # 10ms tolerance for frame synchronization
