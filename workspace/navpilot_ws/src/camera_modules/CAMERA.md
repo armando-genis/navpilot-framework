@@ -51,6 +51,9 @@ Install OpenCV (system package):
 pip3 uninstall -y opencv-python opencv-contrib-python opencv-python-headless
 sudo apt update
 sudo apt install -y python3-opencv
+
+sudo apt-get update
+sudo apt-get install -y pkg-config libturbojpeg0-dev
 ```
 
 ---
@@ -77,14 +80,40 @@ v4l2-ctl -d /dev/video0 --list-formats-ext
 
 ---
 
+## 3.5. Disable Autofocus and Set Manual Focus
+
+To prevent the camera from continuously adjusting focus (which can cause unwanted focus hunting), you can disable autofocus and set a fixed manual focus value.
+
+**For the OBSBOT camera node (`/dev/video4`):**
+
+```bash
+# 1) Turn OFF continuous autofocus
+v4l2-ctl -d /dev/video4 -c focus_automatic_continuous=0
+
+# 2) Set a fixed manual focus value (range: 0-100)
+v4l2-ctl -d /dev/video4 -c focus_absolute=56
+```
+
+**Note:** The focus value `56` is an example. Adjust this value (0-100) based on your desired focus distance. Lower values focus closer, higher values focus farther.
+
 ## 4. Quick Test
 
-Test both video nodes to validate functionality:
 
 **Test /dev/video0:**
 
 ```bash
 gst-launch-1.0 v4l2src device=/dev/video0 ! image/jpeg,width=1920,height=1080,framerate=30/1 ! jpegdec ! videoconvert ! autovideosink
+```
+
+**Test /dev/video0 with outofocus:**
+
+```bash
+gst-launch-1.0 \
+  v4l2src device=/dev/video4 extra-controls="c,focus_automatic_continuous=0,focus_absolute=56" \
+  ! image/jpeg,width=1920,height=1080,framerate=30/1 \
+  ! jpegdec \
+  ! videoconvert \
+  ! autovideosink
 ```
 
 **Test /dev/video1:**
@@ -94,6 +123,24 @@ gst-launch-1.0 v4l2src device=/dev/video1 ! image/jpeg,width=1920,height=1080,fr
 ```
 
 ---
+
+### Verify Focus Settings
+
+To confirm that the focus settings have been applied correctly, run the following commands in a terminal:
+
+```bash
+v4l2-ctl -d /dev/video4 --get-ctrl=focus_automatic_continuous
+v4l2-ctl -d /dev/video4 --get-ctrl=focus_absolute
+```
+
+**Expected output:**
+```
+focus_automatic_continuous: 0
+focus_absolute: 56
+```
+
+**Verification test:**
+Move your hand in front of the lens — the focus should **NOT** hunt or adjust automatically anymore. The camera should maintain the fixed focus value you set.
 
 ## v4l2_camera_node
 

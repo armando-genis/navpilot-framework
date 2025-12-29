@@ -6,13 +6,19 @@ services:
     image: navpilot_image
     container_name: navpilot_container
 
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
-      - 8.8.8.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    # ...or legacy runtime flag:
+    runtime: nvidia
 
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video,graphics,display
       - DISPLAY=${DISPLAY:-:0}
+      - OPEN3D_RENDERING_BACKEND=glsl
 
     volumes:
       - ./workspace:/workspace
@@ -28,21 +34,3 @@ services:
     security_opt:
       - seccomp:unconfined
     shm_size: 40g
-
-    networks:
-      default: {}
-      lidar_net:
-        ipv4_address: 192.168.1.100   # static IP for LiDAR access 
-
-networks:
-  default:
-    driver: bridge
-
-  lidar_net:
-    driver: macvlan
-    driver_opts:
-      parent: enp2s0
-    ipam:
-      config:
-        - subnet: 192.168.1.0/24
-          gateway: 192.168.1.1

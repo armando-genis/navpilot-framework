@@ -12,11 +12,12 @@ def generate_launch_description():
             parameters=[
                 # Multi-camera mode: provide list of video devices
                 # If you have more than one device, multi-camera mode will be activated
-                {"video_devices": ["/dev/video0", "/dev/video2"]},  # Add more devices as needed
+                {"video_devices": ["/dev/video4", "/dev/video6"]}, 
                 
-                # Optional: synchronization settings (defaults shown)
-                {"sync_tolerance_ns": 10000000},  # 10ms tolerance for frame synchronization
-                {"max_queue": 10},  # Maximum queue size per camera
+                # Synchronization settings
+                {"sync_enabled": True},  # True = synchronized publishing, False = independent publishing
+                {"sync_tolerance_ns": 100000000},  # 100ms tolerance for USB cameras (they often have 50-100ms offset)
+                {"max_queue": 30},  # Queue size per camera (should be > 1 second of frames)
                 
                 # These settings will be applied to all cameras:
                 {"image_size": [1920, 1080]},

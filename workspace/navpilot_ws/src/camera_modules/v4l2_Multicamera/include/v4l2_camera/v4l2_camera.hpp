@@ -120,6 +120,12 @@ private:
   std::vector<std::string> video_devices_;
   uint64_t sync_tolerance_ns_{10'000'000ULL};  // 10ms
   size_t max_queue_{10};
+  bool sync_enabled_{false};  // Enable/disable frame synchronization
+
+  // Per-camera publishers for multi-camera mode
+  std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> multi_image_pubs_;
+  std::vector<rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> multi_info_pubs_;
+  std::vector<image_transport::CameraPublisher> multi_camera_transport_pubs_;
 
   MultiCamSynchronizer<sensor_msgs::msg::Image::UniquePtr> sync_{1, 10'000'000ULL, 10};
 

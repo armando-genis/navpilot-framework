@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include <vector>
 #include <map>
@@ -36,8 +37,21 @@ using v4l2_camera::V4l2CameraDevice;
 using sensor_msgs::msg::Image;
 
 V4l2CameraDevice::V4l2CameraDevice(std::string device, bool use_v4l2_buffer_timestamps, rclcpp::Duration timestamp_offset_duration)
-: device_{std::move(device)}, use_v4l2_buffer_timestamps_{use_v4l2_buffer_timestamps}, timestamp_offset_{timestamp_offset_duration}
+: device_{std::move(device)}, fd_{-1}, use_v4l2_buffer_timestamps_{use_v4l2_buffer_timestamps}, timestamp_offset_{timestamp_offset_duration}, tsc_offset_{0}
 {
+}
+
+V4l2CameraDevice::~V4l2CameraDevice()
+{
+  // Stop streaming if active
+  stop();
+  
+  // Close the file descriptor if open
+  if (fd_ >= 0) {
+    ::close(fd_);
+    fd_ = -1;
+    RCLCPP_INFO(rclcpp::get_logger("v4l2_camera"), "Closed device: %s", device_.c_str());
+  }
 }
 
 bool V4l2CameraDevice::open()

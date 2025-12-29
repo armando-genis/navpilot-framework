@@ -142,7 +142,19 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   canceled_{false},
   timestamp_offset_duration_{0, 0}
 {
-  // Prepare publisher
+  // Read video_devices_ FIRST to determine if we're in multi-camera mode
+  // This must happen before creating publishers to avoid image_transport conflicts
+  std::vector<std::string> default_video_devices;
+  video_devices_ = this->declare_parameter<std::vector<std::string>>("video_devices", default_video_devices);
+  RCLCPP_INFO(get_logger(), "video_devices_ size: %zu", video_devices_.size());
+  for (size_t i = 0; i < video_devices_.size(); ++i) {
+    RCLCPP_INFO(get_logger(), "  video_devices_[%zu]: %s", i, video_devices_[i].c_str());
+  }
+
+  // Check if multi-camera mode is enabled (more than 1 device in video_devices_)
+  const bool multi_mode = video_devices_.size() > 1;
+
+  // Prepare publisher settings
   // This should happen before registering on_set_parameters_callback,
   // else transport plugins will fail to declare their parameters
   bool use_sensor_data_qos = declare_parameter("use_sensor_data_qos", false);
@@ -163,20 +175,18 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
   use_image_transport_ = declare_parameter("use_image_transport", true);
 
-  if (use_image_transport_) {
-    camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
-                                                                    qos.get_rmw_qos_profile());
+  // Only create single-camera publishers if NOT in multi-camera mode
+  // Multi-camera mode creates per-camera publishers in startMultiCamera()
+  if (!multi_mode) {
+    if (use_image_transport_) {
+      camera_transport_pub_ = image_transport::create_camera_publisher(this, "image_raw",
+                                                                      qos.get_rmw_qos_profile());
+    } else {
+      image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos);
+      info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
+    }
   } else {
-    image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos);
-    info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos);
-  }
-
-  // Read video_devices_ early to check if we should use a device from it
-  std::vector<std::string> default_video_devices;
-  video_devices_ = this->declare_parameter<std::vector<std::string>>("video_devices", default_video_devices);
-  RCLCPP_INFO(get_logger(), "video_devices_ size: %zu", video_devices_.size());
-  for (size_t i = 0; i < video_devices_.size(); ++i) {
-    RCLCPP_INFO(get_logger(), "  video_devices_[%zu]: %s", i, video_devices_[i].c_str());
+    RCLCPP_INFO(get_logger(), "Multi-camera mode: skipping single-camera publisher creation");
   }
 
   // Prepare camera
@@ -184,14 +194,18 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   device_descriptor.description = "Path to video device";
   device_descriptor.read_only = true;
   
-  // If video_devices_ has exactly one device, use it instead of video_device
+  // Determine which device to use for single camera mode
   std::string device;
   if (!video_devices_.empty() && video_devices_.size() == 1) {
     device = video_devices_[0];
     RCLCPP_INFO(get_logger(), "Using device from video_devices: %s", device.c_str());
-  } else {
+  } else if (!multi_mode) {
     device = declare_parameter<std::string>("video_device", "/dev/video0", device_descriptor);
     RCLCPP_INFO(get_logger(), "Using device from video_device parameter: %s", device.c_str());
+  } else {
+    // Multi-camera mode: use first device from video_devices_ for initial setup
+    device = video_devices_[0];
+    RCLCPP_INFO(get_logger(), "Multi-camera mode: using first device for initial setup: %s", device.c_str());
   }
 
   auto use_v4l2_buffer_timestamps_descriptor = rcl_interfaces::msg::ParameterDescriptor{};
@@ -232,15 +246,27 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
   camera_ = std::make_shared<V4l2CameraDevice>(device, use_v4l2_buffer_timestamps_, timestamp_offset_duration_);
 
-  if (!camera_->open()) {
-    device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
-        "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
-                                           device, false, std::ref(lock_)));
+  bool camera_opened = camera_->open();
+  
+  if (!camera_opened) {
+    if (multi_mode) {
+      // In multi-camera mode, we don't require the first device to open successfully here
+      // since startMultiCamera() will open all devices properly
+      RCLCPP_WARN(get_logger(), "Initial device %s failed to open, but continuing for multi-camera mode", device.c_str());
+      device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
+          "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
+                                             device, false, std::ref(lock_)));
+      diag_composer_->addTask(device_node_existence_diag_.get());
+    } else {
+      device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
+          "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
+                                             device, false, std::ref(lock_)));
 
-    diag_composer_->addTask(device_node_existence_diag_.get());
-    this->diag_updater_->add(*diag_composer_);
-    this->diag_updater_->force_update();
-    return;
+      diag_composer_->addTask(device_node_existence_diag_.get());
+      this->diag_updater_->add(*diag_composer_);
+      this->diag_updater_->force_update();
+      return;
+    }
   } else {
     device_node_existence_diag_ = std::make_shared<diagnostic_updater::FunctionDiagnosticTask>(
         "device node existence", std::bind(&diagnoseDeviceNodeExistence, std::placeholders::_1,
@@ -248,7 +274,9 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     diag_composer_->addTask(device_node_existence_diag_.get());
   }
 
-  cinfo_ = std::make_shared<camera_info_manager::CameraInfoManager>(this, camera_->getCameraName());
+  // Initialize camera info manager - use device name or default for multi-mode
+  std::string camera_name = camera_opened ? camera_->getCameraName() : "multi_camera";
+  cinfo_ = std::make_shared<camera_info_manager::CameraInfoManager>(this, camera_name);
 #ifdef ENABLE_CUDA
   src_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
   dst_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
@@ -257,9 +285,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   // Read parameters and set up callback
   createParameters();
 
-  // Check if multi-camera mode is enabled
-  const bool multi_mode = !video_devices_.empty() && video_devices_.size() > 1;
-
+  // Start cameras based on mode
   if (multi_mode) {
     // Multi-camera mode
     startMultiCamera();
@@ -420,8 +446,11 @@ void V4L2Camera::createParameters()
 {
   // video_devices_ is already declared and set in the constructor, so we don't redeclare it here
   sync_tolerance_ns_ = static_cast<uint64_t>(this->declare_parameter<int64_t>("sync_tolerance_ns", 10'000'000));
-
   max_queue_ = static_cast<size_t>(this->declare_parameter<int64_t>("max_queue", 10));
+  
+  // Sync enabled parameter - when true, frames are synchronized before publishing
+  // When false, each camera publishes independently
+  sync_enabled_ = this->declare_parameter<bool>("sync_enabled", false);
 
   // Node parameters
   auto output_encoding_description = rcl_interfaces::msg::ParameterDescriptor{};
@@ -992,6 +1021,16 @@ sensor_msgs::msg::Image::UniquePtr V4L2Camera::convertOnGpu(sensor_msgs::msg::Im
 
 void V4L2Camera::startMultiCamera()
 {
+  RCLCPP_INFO(get_logger(), "Starting multi-camera mode with %zu cameras, sync_enabled=%s", 
+    video_devices_.size(), sync_enabled_ ? "true" : "false");
+  
+  // Force regular publishers for multi-camera mode to avoid image_transport parameter conflicts
+  // image_transport has known issues with multiple publishers from the same node
+  if (use_image_transport_) {
+    RCLCPP_WARN(get_logger(), "Multi-camera mode: forcing use_image_transport=false to avoid parameter conflicts");
+    use_image_transport_ = false;
+  }
+  
   // Reconstruct sync_ using placement new since it contains a mutex and can't be assigned
   sync_.~MultiCamSynchronizer();
   new (&sync_) MultiCamSynchronizer<sensor_msgs::msg::Image::UniquePtr>(
@@ -1000,36 +1039,48 @@ void V4L2Camera::startMultiCamera()
   cameras_.clear();
   cameras_.reserve(video_devices_.size());
   
+  // Create per-camera publishers
+  multi_image_pubs_.clear();
+  multi_info_pubs_.clear();
+  multi_camera_transport_pubs_.clear();
+  
+  bool use_sensor_data_qos = get_parameter("use_sensor_data_qos").as_bool();
+  const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
+  
+  for (size_t i = 0; i < video_devices_.size(); ++i) {
+    // Use hierarchical topic names: camera_0/image_raw, camera_1/image_raw, etc.
+    std::string topic_prefix = "camera_" + std::to_string(i);
+    auto img_pub = create_publisher<sensor_msgs::msg::Image>(
+      topic_prefix + "/image_raw", qos);
+    auto info_pub = create_publisher<sensor_msgs::msg::CameraInfo>(
+      topic_prefix + "/camera_info", qos);
+    multi_image_pubs_.push_back(img_pub);
+    multi_info_pubs_.push_back(info_pub);
+    RCLCPP_INFO(get_logger(), "Created publishers for %s/image_raw and %s/camera_info", 
+      topic_prefix.c_str(), topic_prefix.c_str());
+  }
+  
   // Get current format settings from the single camera (if it was opened and configured)
-  // or open the first multi-camera device to read formats
   PixelFormat target_format;
-  if (camera_ && camera_->open()) {
+  if (camera_) {
+    // Get the format that was configured in createParameters()
     target_format = camera_->getCurrentDataFormat();
-    camera_->stop();  // Stop single camera since we're using multi-camera mode
-  } else if (!video_devices_.empty()) {
-    // Open first device to read format capabilities
-    auto temp_cam = std::make_shared<V4l2CameraDevice>(
-      video_devices_[0], use_v4l2_buffer_timestamps_, timestamp_offset_duration_);
-    if (temp_cam->open()) {
-      // Use the format that was set in createParameters() if available
-      // Otherwise use current format from device
-      target_format = temp_cam->getCurrentDataFormat();
-      temp_cam->stop();
-    } else {
-      // Use default format if we can't open device
-      target_format.pixelFormat = v4l2_fourcc('Y', 'U', 'Y', 'V');
-      target_format.width = 640;
-      target_format.height = 480;
-      target_format.bytesPerLine = 0;  // Will be set by driver
-      target_format.imageByteSize = 0;  // Will be set by driver
-    }
+    RCLCPP_INFO(get_logger(), "Using format from initial camera: %ux%u", 
+      target_format.width, target_format.height);
+    
+    // IMPORTANT: Release the single camera device to free the file descriptor
+    // This is necessary so we can open the same device in the cameras_ vector
+    camera_.reset();
+    RCLCPP_INFO(get_logger(), "Released initial camera device");
   } else {
     // Use default format
-    target_format.pixelFormat = v4l2_fourcc('Y', 'U', 'Y', 'V');
-    target_format.width = 640;
-    target_format.height = 480;
+    target_format.pixelFormat = v4l2_fourcc('M', 'J', 'P', 'G');
+    target_format.width = 1920;
+    target_format.height = 1080;
     target_format.bytesPerLine = 0;  // Will be set by driver
     target_format.imageByteSize = 0;  // Will be set by driver
+    RCLCPP_INFO(get_logger(), "Using default format: %ux%u MJPG", 
+      target_format.width, target_format.height);
   }
   
   // Create and configure all cameras
@@ -1078,72 +1129,143 @@ void V4L2Camera::startMultiCamera()
 
 void V4L2Camera::captureLoopMulti(size_t cam_id)
 {
+  RCLCPP_INFO(get_logger(), "Starting capture loop for camera %zu", cam_id);
+  
+  size_t frame_count = 0;
+  
   while (rclcpp::ok() && !canceled_.load()) {
     sensor_msgs::msg::Image::UniquePtr img;
     bool buf_err;
     std::optional<uint32_t> seq;
     std::optional<timeval> raw_ts;
     
-    {
-      std::lock_guard<std::mutex> lock(lock_);
-      std::tie(img, buf_err, seq, raw_ts) = cameras_[cam_id]->capture();
-    }
+    // Capture without holding the global lock - each camera has its own file descriptor
+    std::tie(img, buf_err, seq, raw_ts) = cameras_[cam_id]->capture();
     
     if (!img) {
+      RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 5000, 
+        "Camera %zu: capture returned null", cam_id);
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
     
     const auto stamp = img->header.stamp;
     
-    // Convert encoding if needed
+    // Log first frame and then every 100 frames
+    if (frame_count == 0 || frame_count % 100 == 0) {
+      RCLCPP_INFO(get_logger(), "Camera %zu: captured frame %zu, encoding=%s, size=%ux%u", 
+        cam_id, frame_count, img->encoding.c_str(), img->width, img->height);
+    }
+    
+    // Convert encoding if needed (use lock only for GPU conversion if needed)
     if (img->encoding != output_encoding_) {
+      RCLCPP_DEBUG_ONCE(get_logger(), "Camera %zu: converting from %s to %s", 
+        cam_id, img->encoding.c_str(), output_encoding_.c_str());
 #ifdef ENABLE_CUDA
+      std::lock_guard<std::mutex> lock(lock_);
       auto converted = convertOnGpu(*img);
 #else
       auto converted = convert(*img);
 #endif
       if (!converted) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, 
+          "Camera %zu: conversion failed from %s to %s", 
+          cam_id, img->encoding.c_str(), output_encoding_.c_str());
         continue;
       }
       img = std::move(converted);
     }
     
+    frame_count++;
+    
     img->header.stamp = stamp;
-    img->header.frame_id = camera_frame_id_;
+    img->header.frame_id = camera_frame_id_ + "_" + std::to_string(cam_id);
     
-    // Extract timestamp in nanoseconds (combine seconds and nanoseconds)
-    const uint64_t t_ns = static_cast<uint64_t>(img->header.stamp.sec) * 1'000'000'000ULL + 
-                          static_cast<uint64_t>(img->header.stamp.nanosec);
-    
-    // Push to synchronizer
-    sync_.push(cam_id, t_ns, std::move(img));
+    if (sync_enabled_) {
+      // Synchronized mode: push to synchronizer, processLoopMulti will publish
+      const uint64_t t_ns = static_cast<uint64_t>(stamp.sec) * 1'000'000'000ULL + 
+                            static_cast<uint64_t>(stamp.nanosec);
+      sync_.push(cam_id, t_ns, std::move(img));
+      
+      if (frame_count == 1) {
+        RCLCPP_INFO(get_logger(), "Camera %zu: pushing first frame to synchronizer", cam_id);
+      }
+    } else {
+      // Independent mode: publish camera frame immediately
+      auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
+      if (!checkCameraInfo(*img, *ci)) {
+        *ci = sensor_msgs::msg::CameraInfo{};
+        ci->height = img->height;
+        ci->width = img->width;
+      }
+      ci->header.stamp = stamp;
+      ci->header.frame_id = img->header.frame_id;
+      
+      // Publish to per-camera topic
+      if (cam_id < multi_image_pubs_.size() && cam_id < multi_info_pubs_.size()) {
+        if (frame_count == 1) {
+          RCLCPP_INFO(get_logger(), "Camera %zu: publishing first frame to topic (independent mode)", cam_id);
+        }
+        multi_image_pubs_[cam_id]->publish(std::move(img));
+        multi_info_pubs_[cam_id]->publish(std::move(ci));
+      } else {
+        RCLCPP_ERROR(get_logger(), "Camera %zu: publisher index out of range!", cam_id);
+      }
+    }
   }
+  
+  RCLCPP_INFO(get_logger(), "Capture loop for camera %zu ended", cam_id);
 }
 
 void V4L2Camera::processLoopMulti()
 {
+  if (!sync_enabled_) {
+    RCLCPP_INFO(get_logger(), "Process loop: sync disabled, exiting (frames published independently)");
+    return;
+  }
+  
+  RCLCPP_INFO(get_logger(), "Process loop for synchronized multi-camera started (tolerance=%lu ms)", 
+    sync_tolerance_ns_ / 1'000'000);
+  
+  size_t sync_frame_count = 0;
+  size_t consecutive_empty = 0;
+  
   while (rclcpp::ok() && !canceled_.load()) {
     auto synced = sync_.try_pop();
     
     if (!synced) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      consecutive_empty++;
+      // Adaptive sleep: wait longer if queue is consistently empty
+      if (consecutive_empty > 10) {
+        // Queue is empty, wait ~half a frame period
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
       continue;
     }
+    
+    consecutive_empty = 0;
+    sync_frame_count++;
     
     // synced->frames[i].data contains Image::UniquePtr for each camera
     // synced->stamp_ns_ref is the reference timestamp
     
-    // TODO: Run BEV stitch here
-    // For now, I am publish the first camera's image as an example
-    // In the future,but for now i do not have the other cameras :(
-    // 1. Extract all frames from synced->frames
-    // 2. Run BEV stitching algorithm
-    // 3. Publish the stitched BEV image
+    if (sync_frame_count == 1) {
+      RCLCPP_INFO(get_logger(), "Publishing first synchronized frame set from %zu cameras", 
+        synced->frames.size());
+    } else if (sync_frame_count % 300 == 0) {
+      // Log every ~10 seconds at 30fps
+      RCLCPP_INFO(get_logger(), "Sync: published %zu synchronized frame sets", sync_frame_count);
+    }
     
-    // Example: publish first camera's image (remove this when implementing BEV)
-    if (!synced->frames.empty() && synced->frames[0].data) {
-      auto img = std::move(synced->frames[0].data);
+    // Publish each synchronized frame to its respective camera topic
+    for (size_t cam_id = 0; cam_id < synced->frames.size(); ++cam_id) {
+      if (!synced->frames[cam_id].data) {
+        continue;
+      }
+      
+      auto img = std::move(synced->frames[cam_id].data);
       auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
       
       if (!checkCameraInfo(*img, *ci)) {
@@ -1153,16 +1275,17 @@ void V4L2Camera::processLoopMulti()
       }
       
       ci->header.stamp = img->header.stamp;
-      ci->header.frame_id = camera_frame_id_;
+      ci->header.frame_id = img->header.frame_id;
       
-      if (use_image_transport_) {
-        camera_transport_pub_.publish(*img, *ci);
-      } else {
-        image_pub_->publish(std::move(img));
-        info_pub_->publish(std::move(ci));
+      // Publish to per-camera topic
+      if (cam_id < multi_image_pubs_.size() && cam_id < multi_info_pubs_.size()) {
+        multi_image_pubs_[cam_id]->publish(std::move(img));
+        multi_info_pubs_[cam_id]->publish(std::move(ci));
       }
     }
   }
+  
+  RCLCPP_INFO(get_logger(), "Process loop for multi-camera ended");
 }
 }  // namespace v4l2_camera
 
