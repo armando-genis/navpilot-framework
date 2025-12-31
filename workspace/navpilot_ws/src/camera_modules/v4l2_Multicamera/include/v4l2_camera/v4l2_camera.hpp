@@ -126,6 +126,10 @@ private:
   std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> multi_image_pubs_;
   std::vector<rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr> multi_info_pubs_;
   std::vector<image_transport::CameraPublisher> multi_camera_transport_pubs_;
+  
+  // Cached data per camera for performance (avoid recreating each frame)
+  std::vector<sensor_msgs::msg::CameraInfo> cached_camera_infos_;
+  std::vector<std::string> camera_frame_ids_;
 
   MultiCamSynchronizer<sensor_msgs::msg::Image::UniquePtr> sync_{1, 10'000'000ULL, 10};
 

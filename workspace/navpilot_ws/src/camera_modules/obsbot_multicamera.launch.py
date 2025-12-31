@@ -21,7 +21,7 @@ def generate_launch_description():
                 
                 # These settings will be applied to all cameras:
                 {"image_size": [1920, 1080]},
-                {"time_per_frame": [1, 15]},
+                {"time_per_frame": [1, 30]},
                 {"pixel_format": "MJPG"},
                 
                 # PERFORMANCE: Publish MJPG directly without RGB conversion

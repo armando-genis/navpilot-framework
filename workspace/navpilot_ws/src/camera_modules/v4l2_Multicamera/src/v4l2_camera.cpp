@@ -1047,6 +1047,10 @@ void V4L2Camera::startMultiCamera()
   bool use_sensor_data_qos = get_parameter("use_sensor_data_qos").as_bool();
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
   
+  // Pre-compute frame IDs and cache CameraInfo for each camera to avoid recreating each frame
+  cached_camera_infos_.clear();
+  camera_frame_ids_.clear();
+  
   for (size_t i = 0; i < video_devices_.size(); ++i) {
     // Use hierarchical topic names: camera_0/image_raw, camera_1/image_raw, etc.
     std::string topic_prefix = "camera_" + std::to_string(i);
@@ -1056,6 +1060,13 @@ void V4L2Camera::startMultiCamera()
       topic_prefix + "/camera_info", qos);
     multi_image_pubs_.push_back(img_pub);
     multi_info_pubs_.push_back(info_pub);
+    
+    // Pre-compute frame_id string for this camera (avoid string concatenation each frame)
+    camera_frame_ids_.push_back(camera_frame_id_ + "_" + std::to_string(i));
+    
+    // Cache CameraInfo for this camera (avoid copying from cinfo manager each frame)
+    cached_camera_infos_.push_back(cinfo_->getCameraInfo());
+    
     RCLCPP_INFO(get_logger(), "Created publishers for %s/image_raw and %s/camera_info", 
       topic_prefix.c_str(), topic_prefix.c_str());
   }
@@ -1179,7 +1190,8 @@ void V4L2Camera::captureLoopMulti(size_t cam_id)
     frame_count++;
     
     img->header.stamp = stamp;
-    img->header.frame_id = camera_frame_id_ + "_" + std::to_string(cam_id);
+    // Use pre-computed frame_id to avoid string concatenation each frame
+    img->header.frame_id = camera_frame_ids_[cam_id];
     
     if (sync_enabled_) {
       // Synchronized mode: push to synchronizer, processLoopMulti will publish
@@ -1192,14 +1204,15 @@ void V4L2Camera::captureLoopMulti(size_t cam_id)
       }
     } else {
       // Independent mode: publish camera frame immediately
-      auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
+      // Use cached CameraInfo to avoid copying from manager each frame
+      auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cached_camera_infos_[cam_id]);
       if (!checkCameraInfo(*img, *ci)) {
         *ci = sensor_msgs::msg::CameraInfo{};
         ci->height = img->height;
         ci->width = img->width;
       }
       ci->header.stamp = stamp;
-      ci->header.frame_id = img->header.frame_id;
+      ci->header.frame_id = camera_frame_ids_[cam_id];
       
       // Publish to per-camera topic
       if (cam_id < multi_image_pubs_.size() && cam_id < multi_info_pubs_.size()) {
@@ -1266,7 +1279,8 @@ void V4L2Camera::processLoopMulti()
       }
       
       auto img = std::move(synced->frames[cam_id].data);
-      auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
+      // Use cached CameraInfo to avoid copying from manager each frame
+      auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cached_camera_infos_[cam_id]);
       
       if (!checkCameraInfo(*img, *ci)) {
         *ci = sensor_msgs::msg::CameraInfo{};

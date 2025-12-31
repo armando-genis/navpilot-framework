@@ -30,6 +30,7 @@
 #include <memory>
 #include <fstream>
 #include <regex>
+#include <cstring>
 
 #include "v4l2_camera/fourcc.hpp"
 
@@ -336,7 +337,9 @@ V4l2CameraDevice::capture() {
     : static_cast<size_t>(cur_data_format_.imageByteSize);
 
   img->data.resize(copy_bytes);
-  std::copy(buffer.start, buffer.start + copy_bytes, img->data.begin());
+  // std::copy(buffer.start, buffer.start + copy_bytes, img->data.begin());
+  // memcpy is optimized with SIMD instructions and is faster for ~300KB MJPEG frames
+  std::memcpy(img->data.data(), buffer.start, copy_bytes);
 
   // Check whether V4L2_BUF_FLAG_ERROR is set in v4l2_buffer.flags
   bool is_v4l2_buffer_flag_error_detected = (buf.flags & V4L2_BUF_FLAG_ERROR);
