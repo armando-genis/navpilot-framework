@@ -371,10 +371,13 @@ if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_YUYV) {
 } else if (cur_data_format_.pixelFormat == V4L2_PIX_FMT_MJPEG ||
            cur_data_format_.pixelFormat == V4L2_PIX_FMT_JPEG)
 {
-  // MJPG is compressed bytes; step/bytesPerLine is not meaningful for sensor_msgs/Image
-  // but we MUST set a non-empty encoding so V4L2Camera::convert() can detect it.
+  // MJPG is compressed bytes
+  // For compressed formats, step represents the full row length
+  // Since MJPEG is variable-length compressed, we set step to data size / height
+  // This gives an "average" bytes per row for the compressed data
   img->encoding = "mjpeg";
-  img->step = 0;
+  // img->step = 0;
+  img->step = (img->height > 0) ? (img->data.size() / img->height) : img->data.size();
 } else {
   img->encoding = "";
   img->step = 0;
@@ -712,8 +715,8 @@ bool V4l2CameraDevice::initMemoryMapping()
 {
   auto req = v4l2_requestbuffers{};
 
-  // Request 4 buffers
-  req.count = 4;
+  // More buffers help absorb USB bandwidth spikes and timing jitter when running multiple cameras
+  req.count = 12;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   req.memory = V4L2_MEMORY_MMAP;
   ioctl(fd_, VIDIOC_REQBUFS, &req);
