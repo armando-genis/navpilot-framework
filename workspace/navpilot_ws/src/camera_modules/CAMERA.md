@@ -88,16 +88,15 @@ To prevent the camera from continuously adjusting focus (which can cause unwante
 
 ```bash
 # 1) Turn OFF continuous autofocus
-v4l2-ctl -d /dev/video4 -c focus_automatic_continuous=0
+v4l2-ctl -d /dev/video0 -c focus_automatic_continuous=0
 
 # 2) Set a fixed manual focus value (range: 0-100)
-v4l2-ctl -d /dev/video4 -c focus_absolute=56
+v4l2-ctl -d /dev/video0 -c focus_absolute=30
 ```
 
-**Note:** The focus value `56` is an example. Adjust this value (0-100) based on your desired focus distance. Lower values focus closer, higher values focus farther.
+**Note:** The focus value `30` is an example. Adjust this value (0-100) based on your desired focus distance. Lower values focus closer, higher values focus farther.
 
 ## 4. Quick Test
-
 
 **Test /dev/video0:**
 
@@ -134,9 +133,10 @@ v4l2-ctl -d /dev/video4 --get-ctrl=focus_absolute
 ```
 
 **Expected output:**
+
 ```
 focus_automatic_continuous: 0
-focus_absolute: 56
+focus_absolute: 30
 ```
 
 **Verification test:**

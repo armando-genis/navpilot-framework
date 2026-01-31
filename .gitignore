@@ -57,6 +57,10 @@ workspace/Optimal-Trajectory-Generation-in-Frenet-Frame/
 /workspace/DistroPoint/
 /workspace/DistroPointclouds/
 
+/workspace/navpilot_ws/src/camera_modules/cameraphotos
+workspace/perceptionUV_Cpp_standalone
+workspace/perceptionUV_Cpp
+
 
 
 
