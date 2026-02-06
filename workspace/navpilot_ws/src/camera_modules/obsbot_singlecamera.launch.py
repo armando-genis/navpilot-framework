@@ -10,7 +10,7 @@ def generate_launch_description():
             name="obsbot",
             namespace="racecar/camera",
             parameters=[
-                {"video_device": "/dev/video6"},
+                {"video_device": "/dev/video0"},
 
                 # Use the param names that work on many Humble builds:
                 {"image_size": [1920, 1080]},

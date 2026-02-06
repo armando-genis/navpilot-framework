@@ -201,11 +201,11 @@ def main():
             "pipeline": obsbot_mjpg_pipeline("/dev/video0", w=1920, h=1080, fps=30),
             "fps": 30.0,
         },
-        {
-            "name": "obsbot2",
-            "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=30),
-            "fps": 30.0,
-        },
+        # {
+        #     "name": "obsbot2",
+        #     "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=30),
+        #     "fps": 30.0,
+        # },
     ]
     
     # Create combined images directory

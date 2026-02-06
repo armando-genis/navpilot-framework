@@ -1,0 +1,33 @@
+# Configuration for multi_camera_sync node
+# Synchronizes camera images (and optionally LiDAR) using message_filters
+
+multi_camera_sync:
+  ros__parameters:
+    # Camera topics - full input topic paths
+    cameras:
+      [
+        "/racecar/camera/camera_0/image_raw",
+        "/racecar/camera/camera_1/image_raw",
+        "/racecar/camera/camera_2/image_raw",
+        "/racecar/camera/camera_3/image_raw",
+      ]
+
+    # Suffix added to output topics (e.g., /camera_1_sync, /raw/camera_front_sync)
+    sync_suffix: "_sync"
+
+    # Synchronization settings
+    queue_size: 10 # Message queue size for synchronizer
+
+    # LiDAR settings
+    use_lidar: false # Enable LiDAR synchronization with cameras
+    lidar_topic_in: "/lidar/points" # Input LiDAR topic
+    lidar_topic_out: "/lidar/points_sync" # Output synchronized LiDAR topic
+
+    # Image saving settings
+    save_images: true # Enable saving synchronized frames to disk
+    output_dir: "/workspace/navpilot_ws" # Base directory for saved images
+    save_interval: 5 # Save every N frames (e.g., 5 = save every 5th frame)
+    image_encoding: "mjpeg" # Image encoding: "mjpeg", "jpeg", "rgb8", "bgr8", "" (auto-detect)
+    # Output structure:
+    #   output_dir/individual/  - Individual camera frames (camera_1_00001.jpg, etc.)
+    #   output_dir/combined/    - Combined horizontal view (combined_00001.jpg)

@@ -60,6 +60,8 @@ workspace/Optimal-Trajectory-Generation-in-Frenet-Frame/
 /workspace/navpilot_ws/src/camera_modules/cameraphotos
 workspace/perceptionUV_Cpp_standalone
 workspace/perceptionUV_Cpp
+workspace/navpilot_ws/combined
+workspace/navpilot_ws/individual
 
 
 

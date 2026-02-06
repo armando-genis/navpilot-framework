@@ -12,7 +12,7 @@ def generate_launch_description():
             parameters=[
                 # Multi-camera mode: provide list of video devices
                 # If you have more than one device, multi-camera mode will be activated
-                {"video_devices": ["/dev/video0", "/dev/video2","/dev/video4"]}, 
+                {"video_devices": ["/dev/video0", "/dev/video2","/dev/video4", "/dev/video6"]}, 
                 
                 # Synchronization settings
                 {"sync_enabled": False},  # True = synchronized publishing, False = independent publishing
@@ -21,7 +21,7 @@ def generate_launch_description():
                 
                 # These settings will be applied to all cameras:
                 {"image_size": [1920, 1080]},
-                {"time_per_frame": [1, 30]},
+                {"time_per_frame": [1, 15]},
                 {"pixel_format": "MJPG"},
                 
                 # PERFORMANCE: Publish MJPG directly without RGB conversion

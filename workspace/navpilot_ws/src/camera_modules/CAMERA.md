@@ -91,7 +91,7 @@ To prevent the camera from continuously adjusting focus (which can cause unwante
 v4l2-ctl -d /dev/video0 -c focus_automatic_continuous=0
 
 # 2) Set a fixed manual focus value (range: 0-100)
-v4l2-ctl -d /dev/video0 -c focus_absolute=30
+v4l2-ctl -d /dev/video0 -c focus_absolute=20
 ```
 
 **Note:** The focus value `30` is an example. Adjust this value (0-100) based on your desired focus distance. Lower values focus closer, higher values focus farther.
@@ -285,3 +285,6 @@ colcon build --packages-select v4l2_Multicamera --cmake-clean-cache --cmake-args
 ```
 
 **Note:** The `-DENABLE_CUDA=OFF` flag disables CUDA support. Remove this flag if you need CUDA acceleration for image processing.
+
+python3 mjpeg_viewer.py
+ros2 launch obsbot_multicamera.launch.py
