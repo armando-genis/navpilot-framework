@@ -128,7 +128,7 @@ private:
 
     // global map
     std::shared_ptr<nav_msgs::msg::OccupancyGrid> global_map_;
-    std::shared_ptr<waypoint_interval::msg::OccupancyGrid> rescaled_chunk_;
+    std::shared_ptr<nav_msgs::msg::OccupancyGrid> rescaled_chunk_;
     std::vector<int> skip_ids = {}; // {363, 391};
 
     // porcentage of the rout

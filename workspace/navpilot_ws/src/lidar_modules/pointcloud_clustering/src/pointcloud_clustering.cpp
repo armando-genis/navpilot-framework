@@ -64,7 +64,6 @@ void pointcloud_clustering_node::pointCloudCallback(const sensor_msgs::msg::Poin
     {
         auto cloud_clusters = obstacle_detector->clustering(input_cloud, CLUSTER_THRESH, CLUSTER_MIN_SIZE, CLUSTER_MAX_SIZE);
         auto &clusters = cloud_clusters.first;
-        auto &centroids = cloud_clusters.second;
 
         if (!clusters.empty())
         {
@@ -180,7 +179,7 @@ void pointcloud_clustering_node::imaginaryObstacle()
     obstacle_collection.header.stamp = rclcpp::Clock{}.now();
     obstacle_collection.header.frame_id = "base_link";
 
-    path_planning_dynamic::msg::Obstacle obstacle;
+    obstacles_information_msgs::msg::Obstacle obstacle;
     geometry_msgs::msg::Polygon polygon;
     geometry_msgs::msg::Point32 p;
     p.x = 5000.0;  // <--- 5km in front of the robot

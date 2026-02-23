@@ -46,9 +46,23 @@ if [ ! -d "mrt_cmake_modules" ]; then
     git clone https://github.com/KIT-MRT/mrt_cmake_modules.git
 fi
 
-
 # Go back to workspace root
 cd /workspace/navpilot_ws || { echo "Failed to cd to /workspace/navpilot_ws"; exit 1; }
+
+if [ ! -d "tinyspline" ]; then
+    git clone https://github.com/msteinbeck/tinyspline.git
+fi
+
+cd tinyspline || { echo "Failed to cd to tinyspline"; exit 1; }
+
+# Build locally (no sudo)
+if [ ! -d "build" ]; then
+    mkdir build
+fi
+
+cd build
+cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+make -j$(nproc)
 
 # Build the specified packages with colcon
 colcon build --packages-select vectornav_msgs
@@ -80,6 +94,7 @@ colcon build --packages-select lanelet2_routing
 colcon build --packages-select lanelet2_validation
 colcon build --packages-select lanelet2_python
 colcon build --packages-select lanelet2_examples
+source install/setup.zsh
 colcon build --packages-select map_visualizer
 colcon build --packages-select waypoints_routing
 colcon build --packages-select path_planning_dynamic
