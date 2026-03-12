@@ -59,6 +59,9 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     obstacle_info_subscription_ = this->create_subscription<obstacles_information_msgs::msg::ObstacleCollection>(
         "/obstacle_info", 10, std::bind(&path_planning::obstacle_info_callback, this, std::placeholders::_1));
 
+    localization_valid_subscription_ = this->create_subscription<std_msgs::msg::Bool>(
+        "/localization_valid", 10, std::bind(&path_planning::localization_valid_callback, this, std::placeholders::_1));
+
     // publisher for the occupancy grid of the obstacles
     occupancy_grid_pub_test_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
         "/occupancy_grid_obstacles", 10);
@@ -373,8 +376,17 @@ void path_planning::publishPolygonLineStrips()
 // =============================
 // map combination & rescale for put obstacles in the global map
 // =============================
+void path_planning::localization_valid_callback(const std_msgs::msg::Bool::ConstSharedPtr msg)
+{
+    localization_valid_ = msg->data;
+}
+
 void path_planning::obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg)
 {
+    if (!localization_valid_)
+    {
+        return;  // skip path planning when localization is not valid
+    }
     if (!global_map_)
     {
         RCLCPP_ERROR(this->get_logger(), "Global map is not available");

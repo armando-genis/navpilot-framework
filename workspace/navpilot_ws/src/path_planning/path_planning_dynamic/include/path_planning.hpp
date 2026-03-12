@@ -192,6 +192,11 @@ private:
     // subscription for the obstacle information
     rclcpp::Subscription<obstacles_information_msgs::msg::ObstacleCollection>::SharedPtr obstacle_info_subscription_;
     void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg);
+
+    // localization valid flag: path planning runs only when true
+    bool localization_valid_ = true;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr localization_valid_subscription_;
+    void localization_valid_callback(const std_msgs::msg::Bool::ConstSharedPtr msg);
     // offset for the origin of the map chunk
     double forward_distance = 7.0;
     int chunk_size = 100;
