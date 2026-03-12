@@ -6,3 +6,6 @@ ros2 launch pointcloud_clustering_KDTree pointcloud_clustering.launch.py
 
 colcon build --packages-select pointcloud_clustering
 colcon build --packages-select pointcloud_rotation
+colcon build --packages-select pointcloud_clustering_KDTree
+
+ros2 launch /workspace/navpilot_ws/src/localization_modules/launch/localization.launch.py
