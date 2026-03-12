@@ -5,6 +5,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <std_msgs/msg/int32.hpp>
@@ -161,7 +162,8 @@ private:
     std::shared_ptr<nav_msgs::msg::OccupancyGrid> rescaled_chunk_;
 
     // function to get the state (position) of the car
-    void getCurrentRobotState();
+    /** @return true if transform was available and state was updated, false otherwise */
+    bool getCurrentRobotState();
 
     // =============================
     // global planner
@@ -217,10 +219,10 @@ private:
     int tree_depth;        // Maximum depth of the tree (e.g., 3 levels)
     int branching_factor;  // Number of paths per node (e.g., 5)
 
-    // white square parameters
-    int square_size = 15; // Size of the square region in grid cells (covers car + margin)
-    int half_square = square_size / 2;
-    double forward_distance_square = 0.0; // this is for the white sqaure that ocloude the obstacles draw in the new map
+    // white square parameters (meters): region cleared around car to avoid self-obstacles
+    double white_square_length_m_ = 3.0;  // along vehicle (forward/back)
+    double white_square_width_m_ = 3.0;   // lateral (left/right)
+    double forward_distance_square = 0.0;   // offset of white square center along heading (m)
 
 
     std::shared_ptr<planner::Node> current_node;
@@ -229,6 +231,8 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr real_trajectories_pub_2;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr all_paths_pub_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr sdv_trajectory_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr car_footprint_pub_;
+    rclcpp::TimerBase::SharedPtr car_footprint_timer_;
 
     struct RelSample { double x, y, heading; };
     std::vector<std::vector<RelSample>> precomputed_rel_; // [cmd][step]
@@ -253,6 +257,7 @@ private:
     void publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, int color_idx);
     void publishAllPathsFromFlat(const TreeFlat& flat);
     void publishTrajectoryPath(const TreeFlat& flat, int leaf_idx);
+    void publishCarFootprintPolygon();
 
     // generate the trajectory based on the flat tree on the A* algorithm
     int generateTrajectoryTree_AStar_flat_map(const State& root_state, TreeFlat& out);

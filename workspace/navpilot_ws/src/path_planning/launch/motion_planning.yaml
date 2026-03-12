@@ -1,10 +1,12 @@
 path_planning_node:
   ros__parameters:
-    maxSteerAngle: 0.6
+    maxSteerAngle: 0.7
     wheelBase: 2.75
     axleToFront: 1.1
     axleToBack: 1.2
     width: 1.9
+    white_square_length: 3.0 # meters, along vehicle (forward/back)
+    white_square_width: 3.0 # meters, lateral (left/right)
     pathLength: 3
     step_car: 0.2
     tree_depth: 15

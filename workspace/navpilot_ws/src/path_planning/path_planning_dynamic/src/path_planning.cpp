@@ -26,6 +26,8 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->declare_parameter<int>("global_planner_outside_value", 100);
     this->declare_parameter<std::string>("global_planner_frame_id", "map");
     this->declare_parameter<std::string>("global_planner_occupancy_output_topic", "occupancy_grid_complete_map");
+    this->declare_parameter<double>("white_square_length", 3.0);
+    this->declare_parameter<double>("white_square_width", 3.0);
 
     this->get_parameter("maxSteerAngle", maxSteerAngle);
     this->get_parameter("wheelBase", wheelBase);
@@ -51,6 +53,8 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->get_parameter("global_planner_outside_value", global_planner_outside_value_);
     this->get_parameter("global_planner_frame_id", global_planner_frame_id_);
     this->get_parameter("global_planner_occupancy_output_topic", global_planner_occupancy_output_topic_);
+    this->get_parameter("white_square_length", white_square_length_m_);
+    this->get_parameter("white_square_width", white_square_width_m_);
 
     obstacle_info_subscription_ = this->create_subscription<obstacles_information_msgs::msg::ObstacleCollection>(
         "/obstacle_info", 10, std::bind(&path_planning::obstacle_info_callback, this, std::placeholders::_1));
@@ -79,6 +83,13 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
 
     polygon_line_strips_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "/polygon_map_line_strips", 10);
+
+    car_footprint_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "car_footprint_polygon", 10);
+
+    // Timer to publish car footprint polygon in base_footprint at 10 Hz
+    car_footprint_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(100), std::bind(&path_planning::publishCarFootprintPolygon, this));
 
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -151,12 +162,12 @@ path_planning::~path_planning()
 // =============================
 // get the state of the car
 // =============================
-void path_planning::getCurrentRobotState()
+bool path_planning::getCurrentRobotState()
 {
     geometry_msgs::msg::Transform pose_tf;
     try
     {
-        pose_tf = tf2_buffer.lookupTransform("map", "velodyne", tf2::TimePointZero).transform;
+        pose_tf = tf2_buffer.lookupTransform(global_planner_frame_id_, "velodyne", tf2::TimePointZero).transform;
         car_state_->x = pose_tf.translation.x;
         car_state_->y = pose_tf.translation.y;
         car_state_->z = pose_tf.translation.z - 2.10;
@@ -169,11 +180,14 @@ void path_planning::getCurrentRobotState()
         // Create/refresh the current node with updated car state
         vector<State> empty_trajectory = {*car_state_};
         current_node = std::make_shared<planner::Node>(*car_state_, empty_trajectory, 0.0, 0.0, 1, std::weak_ptr<planner::Node>());
+        return true;
     }
-
     catch (tf2::TransformException &ex)
     {
-        std::cout << red << "Transform error: " << ex.what() << reset << std::endl;
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+            "Transform unavailable (%s -> velodyne): %s. Skipping path planning until TF is available.",
+            global_planner_frame_id_.c_str(), ex.what());
+        return false;
     }
 }
 
@@ -372,7 +386,10 @@ void path_planning::obstacle_info_callback(const obstacles_information_msgs::msg
         return;
     }
     std::cout << green << "Obstacles are available and global map is available" << reset << std::endl;
-    getCurrentRobotState();
+    if (!getCurrentRobotState())
+    {
+        return;  // TF not available (e.g. "map" frame missing); skip to avoid crash
+    }
     map_combination(msg);
 }
 
@@ -637,16 +654,16 @@ void path_planning::map_combination(const obstacles_information_msgs::msg::Obsta
     int car_x_rescaled = static_cast<int>((white_square.x - rescaled_chunk_->info.origin.position.x) / rescaled_chunk_->info.resolution);
     int car_y_rescaled = static_cast<int>((white_square.y - rescaled_chunk_->info.origin.position.y) / rescaled_chunk_->info.resolution);
 
-    // Create a solid white square around the car using rasterization
-    // This ensures complete coverage without gaps
-    double half_size_meters = (square_size * rescaled_chunk_->info.resolution) / 2.0;
-    
-    // Define the four corners of the square in world coordinates
+    // Create a solid white rectangle around the car using rasterization (length along vehicle, width lateral)
+    double half_length_m = white_square_length_m_ / 2.0;
+    double half_width_m = white_square_width_m_ / 2.0;
+
+    // Corners in vehicle frame: (along, lateral) then rotated by heading
     std::vector<std::pair<double, double>> corners = {
-        {-half_size_meters, -half_size_meters},
-        {half_size_meters, -half_size_meters},
-        {half_size_meters, half_size_meters},
-        {-half_size_meters, half_size_meters}
+        {-half_length_m, -half_width_m},
+        {half_length_m, -half_width_m},
+        {half_length_m, half_width_m},
+        {-half_length_m, half_width_m}
     };
     
     // Rotate corners and convert to grid coordinates
@@ -1633,6 +1650,52 @@ void path_planning::publishAllPathsFromFlat(const TreeFlat& flat)
     all_paths_pub_->publish(msg);
 }
 
+void path_planning::publishCarFootprintPolygon()
+{
+    if (car_footprint_pub_->get_subscription_count() == 0) return;
+
+    geometry_msgs::msg::TransformStamped tf_base_to_map;
+    try
+    {
+        tf_base_to_map = tf2_buffer.lookupTransform(
+            "map", "base_footprint", tf2::TimePointZero);
+    }
+    catch (const tf2::TransformException&)
+    {
+        return;  // skip if transform not available
+    }
+
+    visualization_msgs::msg::Marker line_strip;
+    line_strip.header.frame_id = "map";
+    line_strip.header.stamp = this->now();
+    line_strip.ns = "car_footprint";
+    line_strip.id = 0;
+    line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    line_strip.action = visualization_msgs::msg::Marker::ADD;
+    line_strip.scale.x = 0.05;
+    line_strip.color.r = 0.0f;
+    line_strip.color.g = 1.0f;
+    line_strip.color.b = 0.0f;
+    line_strip.color.a = 1.0f;
+
+    for (const auto& pt : car_data_.vehicle_geometry.points)
+    {
+        geometry_msgs::msg::PointStamped pt_base;
+        pt_base.header.frame_id = "base_footprint";
+        pt_base.header.stamp = line_strip.header.stamp;
+        pt_base.point.x = pt.x;
+        pt_base.point.y = pt.y;
+        pt_base.point.z = pt.z;
+
+        geometry_msgs::msg::PointStamped pt_map;
+        tf2::doTransform(pt_base, pt_map, tf_base_to_map);
+        line_strip.points.push_back(pt_map.point);
+    }
+
+    visualization_msgs::msg::MarkerArray msg;
+    msg.markers.push_back(line_strip);
+    car_footprint_pub_->publish(msg);
+}
 
 void path_planning::publishTrajectoryPath(const TreeFlat& flat, int leaf_idx)
 {

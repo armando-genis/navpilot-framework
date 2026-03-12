@@ -15,3 +15,5 @@ ros2 launch /workspace/navpilot_ws/src/localization_modules/launch_coarse_to_fin
 colcon build --packages-select path_planning_dynamic
 
 ros2 launch /workspace/navpilot_ws/src/path_planning/launch/planning_obstacles.launch.py
+
+rviz2 -d /workspace/navpilot_ws/src/path_planning/path_planning_viz.rviz
