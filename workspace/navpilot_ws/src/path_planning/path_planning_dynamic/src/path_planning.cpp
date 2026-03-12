@@ -77,6 +77,9 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     global_planner_occupancy_grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
         global_planner_occupancy_output_topic_, 10);
 
+    polygon_line_strips_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "/polygon_map_line_strips", 10);
+
     // -------------> Initialize the shared pointers  <------------
     global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
     rescaled_chunk_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
@@ -87,6 +90,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     if (type_map_ == "polygon") {
         global_planner_polygon_ = std::make_shared<GlobalPlannerfromPolygon>();
         global_planner_polygon_->setMapFile(polygon_path_);
+        global_planner_polygon_->setOccupancyGridParams(global_planner_resolution_, global_planner_close_radius_, global_planner_close_iters_, global_planner_outside_value_, global_planner_frame_id_);
         if (!global_planner_polygon_->loadAndPrintSummary()) {
             RCLCPP_ERROR(this->get_logger(), "Failed to load polygon map from %s", polygon_path_.c_str());
         }
@@ -123,6 +127,8 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     motionCommands();
     precomputeCommandSamples();
     publishGlobalPlanner();
+    if (type_map_ == "polygon" && global_planner_polygon_)
+        publishPolygonLineStrips();
     if (type_map_ == "lanelet2" && global_planner_ && global_planner_->isOccupancyGridReady())
     {
         global_planner_occupancy_grid_ = global_planner_->getOccupancyGrid();
@@ -340,6 +346,14 @@ void path_planning::publishGlobalPlannerOccupancyGrid()
     
     global_planner_occupancy_grid_publisher_->publish(global_planner_occupancy_grid_);
 
+}
+
+void path_planning::publishPolygonLineStrips()
+{
+    if (!global_planner_polygon_) return;
+    visualization_msgs::msg::MarkerArray markers =
+        global_planner_polygon_->getPolygonLineStripMarkers(global_planner_frame_id_);
+    polygon_line_strips_publisher_->publish(markers);
 }
 
 // =============================

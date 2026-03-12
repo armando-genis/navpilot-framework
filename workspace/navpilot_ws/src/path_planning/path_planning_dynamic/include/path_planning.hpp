@@ -179,8 +179,10 @@ private:
     std::vector<point_struct> all_waypoints_from_global_planner_;  // waypoint with the central path and the neighbor lanelets
     visualization_msgs::msg::MarkerArray global_planner_markers_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr global_planner_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr polygon_line_strips_publisher_;
     void publishGlobalPlanner();
     void publishGlobalPlannerOccupancyGrid();
+    void publishPolygonLineStrips();
     // =============================
     // map combination and convine with the map obstacles
     // =============================

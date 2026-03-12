@@ -8,6 +8,7 @@
 #include <string>
 #include <mutex>
 #include <unordered_map>
+#include <array>
 
 #include "GlobalPlanner.hpp"  // for point_struct
 
@@ -39,8 +40,21 @@ private:
     std::string map_frame_ = "map";
     bool loaded_ = false;
     std::vector<point_struct> waypoints_;  // centerline as waypoints
+    /** Polygon boundaries from JSON "polygons", each polygon as (x, y) with z=0. */
+    std::vector<std::vector<std::array<double, 2>>> polygon_vertices_;
     nav_msgs::msg::OccupancyGrid occupancy_grid_;
     bool occupancy_grid_ready_ = false;
+
+    double resolution_ = 0.2;
+    int close_radius_ = 1;
+    int close_iters_ = 1;
+    int outside_value_ = 100;
+
+    void generateOccupancyGrid();
+    void worldToGrid(double wx, double wy, double min_x, double min_y, int& gx, int& gy) const;
+    void fillPolygon(const std::vector<std::array<double, 2>>& points_xy, int width, int height,
+                     double min_x, double min_y, std::vector<int8_t>& grid, int8_t value) const;
+    void morphClose(std::vector<int8_t>& data, int width, int height, int radius, int iters) const;
 
 public:
     GlobalPlannerfromPolygon();
@@ -48,6 +62,9 @@ public:
 
     /** Set map file path and frame from config (e.g. from config.yaml map_file). */
     void setMapFile(const std::string& path);
+
+    /** Set occupancy grid parameters (same as GlobalPlanner). Call before loadAndPrintSummary(). */
+    void setOccupancyGridParams(double resolution, int close_radius, int close_iters, int outside_value, const std::string& frame_id);
 
     /** Path to the HD map JSON file (e.g. /workspace/models/hdmap_export.json). */
     const std::string& getMapFilePath() const { return map_file_path_; }
@@ -67,6 +84,9 @@ public:
     std::vector<point_struct> getAllAllWaypointsStruct() const;
     nav_msgs::msg::OccupancyGrid getOccupancyGrid() const;
     bool isOccupancyGridReady() const { return occupancy_grid_ready_; }
+
+    /** Polygon line strips (z=0) as LINE_STRIP markers for RViz. */
+    visualization_msgs::msg::MarkerArray getPolygonLineStripMarkers(const std::string& frame_id) const;
 };
 
 #endif
