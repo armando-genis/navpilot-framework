@@ -31,6 +31,7 @@ find_package(lanelet2_routing)
 find_package(lanelet2_traffic_rules)
 find_package(lanelet2_validation)
 find_package(polygon_msgs REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 add_executable(path_planning_node
                 src/path_planning.cpp
@@ -38,6 +39,7 @@ add_executable(path_planning_node
                 src/CarData.cpp
                 src/Grid_map.cpp
                 src/GlobalPlanner.cpp
+                src/GlobalPlannerfromPolygon.cpp
                )
 
 ament_target_dependencies(path_planning_node
@@ -79,6 +81,7 @@ install(TARGETS
 target_link_libraries(path_planning_node
   Eigen3::Eigen
   tinysplinecxx
+  nlohmann_json::nlohmann_json
 )
 
 # Install other files (e.g., launch files)

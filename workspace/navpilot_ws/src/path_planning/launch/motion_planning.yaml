@@ -9,9 +9,11 @@ path_planning_node:
     step_car: 0.2
     tree_depth: 15
     branching_factor: 5
-    map_path: "/workspace/models/LOAM_parking_tec/parking_tec_2_.osm"
-    start_lanelet_id: 310
-    end_lanelet_id: 315
+    type_map: "polygon" # "lanelet2" or "polygon"
+    map_path: "/workspace/models/incmty.osm"
+    polygon_path: "/workspace/models/hdmap_export.json"
+    start_lanelet_id: 21
+    end_lanelet_id: 28
     x_offset: 0.0
     y_offset: 0.0
     num_lateral_offsets: 0

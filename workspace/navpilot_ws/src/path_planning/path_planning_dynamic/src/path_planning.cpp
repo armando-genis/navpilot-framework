@@ -11,7 +11,9 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->declare_parameter<double>("step_car", 0.0);
     this->declare_parameter<int>("tree_depth", 3);
     this->declare_parameter<int>("branching_factor", 5);
+    this->declare_parameter<std::string>("type_map", "lanelet2");
     this->declare_parameter<std::string>("map_path", "");
+    this->declare_parameter<std::string>("polygon_path", "");
     this->declare_parameter<double>("x_offset", 0.0);
     this->declare_parameter<double>("y_offset", 0.0);
     this->declare_parameter<int>("start_lanelet_id", 0);
@@ -34,7 +36,9 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     this->get_parameter("step_car", step_car);
     this->get_parameter("tree_depth", tree_depth);
     this->get_parameter("branching_factor", branching_factor);
+    this->get_parameter("type_map", type_map_);
     this->get_parameter("map_path", map_path_);
+    this->get_parameter("polygon_path", polygon_path_);
     this->get_parameter("x_offset", x_offset_);
     this->get_parameter("y_offset", y_offset_);
     this->get_parameter("start_lanelet_id", start_lanelet_id_);
@@ -79,13 +83,26 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     car_state_ = std::make_shared<State>();
     grid_map_ = nullptr;
     current_node = nullptr;
-    global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_, global_planner_resolution_, global_planner_close_radius_, global_planner_close_iters_, global_planner_outside_value_, global_planner_frame_id_);
+
+    if (type_map_ == "polygon") {
+        global_planner_polygon_ = std::make_shared<GlobalPlannerfromPolygon>();
+        global_planner_polygon_->setMapFile(polygon_path_);
+        if (!global_planner_polygon_->loadAndPrintSummary()) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to load polygon map from %s", polygon_path_.c_str());
+        }
+        all_waypoints_from_global_planner_ = global_planner_polygon_->getAllAllWaypointsStruct();
+    } else {
+        // default: "lanelet2"
+        global_planner_ = std::make_shared<GlobalPlanner>(x_offset_, y_offset_, map_path_, start_lanelet_id_, end_lanelet_id_, global_planner_resolution_, global_planner_close_radius_, global_planner_close_iters_, global_planner_outside_value_, global_planner_frame_id_);
+        all_waypoints_from_global_planner_ = global_planner_->getAllAllWaypointsStruct();
+    }
 
     // Create the vehicle geometry
     car_data_ = CarData(maxSteerAngle, wheelBase, axleToFront, axleToBack, width);
     car_data_.createVehicleGeometry();
 
     // log out parameters
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mtype_map: %s\033[0m", type_map_.c_str());
     RCLCPP_INFO(this->get_logger(), "\033[1;34mmaxSteerAngle: %f\033[0m", maxSteerAngle);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mwheelBase: %f\033[0m", wheelBase);
     RCLCPP_INFO(this->get_logger(), "\033[1;34maxleToFront: %f\033[0m", axleToFront);
@@ -96,6 +113,7 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     RCLCPP_INFO(this->get_logger(), "\033[1;34mtree_depth: %d\033[0m", tree_depth);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mbranching_factor: %d\033[0m", branching_factor);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mmap_path: %s\033[0m", map_path_.c_str());
+    RCLCPP_INFO(this->get_logger(), "\033[1;34mpolygon_path: %s\033[0m", polygon_path_.c_str());
     RCLCPP_INFO(this->get_logger(), "\033[1;34mx_offset: %f\033[0m", x_offset_);
     RCLCPP_INFO(this->get_logger(), "\033[1;34my_offset: %f\033[0m", y_offset_);
     RCLCPP_INFO(this->get_logger(), "\033[1;34mstart_lanelet_id: %d\033[0m", start_lanelet_id_);
@@ -104,11 +122,16 @@ path_planning::path_planning() : Node("path_planning"), tf2_buffer(this->get_clo
     // get the motion commans
     motionCommands();
     precomputeCommandSamples();
-    all_waypoints_from_global_planner_ = global_planner_->getAllAllWaypointsStruct();
     publishGlobalPlanner();
-    if (global_planner_->isOccupancyGridReady())
+    if (type_map_ == "lanelet2" && global_planner_ && global_planner_->isOccupancyGridReady())
     {
         global_planner_occupancy_grid_ = global_planner_->getOccupancyGrid();
+        publishGlobalPlannerOccupancyGrid();
+        global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>(global_planner_occupancy_grid_);
+    }
+    else if (type_map_ == "polygon" && global_planner_polygon_ && global_planner_polygon_->isOccupancyGridReady())
+    {
+        global_planner_occupancy_grid_ = global_planner_polygon_->getOccupancyGrid();
         publishGlobalPlannerOccupancyGrid();
         global_map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>(global_planner_occupancy_grid_);
     }
@@ -158,12 +181,18 @@ void path_planning::publishGlobalPlanner()
     global_planner_markers_.markers.clear();
     
     // Clear previous text markers
+    visualization_msgs::msg::MarkerArray clear_array;
     visualization_msgs::msg::Marker clear_text;
+
     clear_text.header.frame_id = "map";
     clear_text.header.stamp = this->now();
     clear_text.action = visualization_msgs::msg::Marker::DELETEALL;
-    clear_text.ns = "global_planner_text";
-    global_planner_markers_.markers.push_back(clear_text);
+
+    clear_array.markers.push_back(clear_text);
+
+    global_planner_publisher_->publish(clear_array);
+
+    global_planner_markers_.markers.clear();
     
     for (size_t i = 0; i < all_waypoints_from_global_planner_.size(); i++)
     {
@@ -316,7 +345,7 @@ void path_planning::publishGlobalPlannerOccupancyGrid()
 // =============================
 // map combination & rescale for put obstacles in the global map
 // =============================
-void path_planning::obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg)
+void path_planning::obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg)
 {
     if (!global_map_)
     {
@@ -355,7 +384,7 @@ cv::Mat path_planning::rescaleChunk(const cv::Mat &chunk_mat, double scale_facto
     return rescaled_chunk;
 }
 
-void path_planning::map_combination(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg)
+void path_planning::map_combination(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg)
 {
     // print the obstacle collection size
     std::cout << green << "Obstacle collection size: " << msg->obstacles.size() << reset << std::endl;
@@ -755,7 +784,8 @@ int path_planning::generateTrajectoryTree_AStar_flat_map(const State& root_state
     std::unordered_map<LatticeKey, double, LatticeKeyHash> best_g;
 
     auto stateKey = [&](const State& s)->LatticeKey {
-        return LatticeKey{ s.gridx, s.gridy, heading_bin(s.heading) };
+        // return LatticeKey{ s.gridx, s.gridy, heading_bin(s.heading) };
+        return LatticeKey{ static_cast<int>(s.gridx), static_cast<int>(s.gridy), heading_bin(s.heading) };
     };
 
     // Heuristic lower bound from depth d to EFFECTIVE_DEPTH (reward only)
@@ -975,7 +1005,7 @@ int path_planning::generateTrajectoryTree_AStar_flat_map_with_waypoints(const St
     std::unordered_map<LatticeKey, double, LatticeKeyHash> best_g;
 
     auto stateKey = [&](const State& s)->LatticeKey {
-        return LatticeKey{ s.gridx, s.gridy, heading_bin(s.heading) };
+        return LatticeKey{ static_cast<int>(s.gridx), static_cast<int>(s.gridy), heading_bin(s.heading) };
     };
 
     // Admissible LB heuristic: only forward reward remaining

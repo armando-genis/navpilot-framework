@@ -48,6 +48,9 @@
 // Global Planner
 #include "GlobalPlanner.hpp"
 
+// Global Planner from Polygon
+#include "GlobalPlannerfromPolygon.hpp"
+
 // C++
 #include <iostream>
 #include <vector>
@@ -163,8 +166,11 @@ private:
     // =============================
     // global planner
     // =============================
+    std::string type_map_;  // "lanelet2" or "polygon"
     std::shared_ptr<GlobalPlanner> global_planner_;
+    std::shared_ptr<GlobalPlannerfromPolygon> global_planner_polygon_;
     std::string map_path_;
+    std::string polygon_path_;
     double x_offset_;
     double y_offset_;
     int start_lanelet_id_;
@@ -181,13 +187,13 @@ private:
 
     // subscription for the obstacle information
     rclcpp::Subscription<obstacles_information_msgs::msg::ObstacleCollection>::SharedPtr obstacle_info_subscription_;
-    void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
+    void obstacle_info_callback(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg);
     // offset for the origin of the map chunk
     double forward_distance = 7.0;
     int chunk_size = 100;
     int chunk_radius = chunk_size / 2;
     double scale_factor = 1; // if the map resolution is 1.0 is a scale factor of 5 and if the map resolution is 0.2 the salce resultion shoudl be 1.
-    void map_combination(const obstacles_information_msgs::msg::ObstacleCollection::SharedPtr msg);
+    void map_combination(const obstacles_information_msgs::msg::ObstacleCollection::ConstSharedPtr msg);
     cv::Mat toMat(const nav_msgs::msg::OccupancyGrid &map);
     cv::Mat rescaleChunk(const cv::Mat &chunk_mat, double scale_factor);
     // publisher for the occupancy grid 
