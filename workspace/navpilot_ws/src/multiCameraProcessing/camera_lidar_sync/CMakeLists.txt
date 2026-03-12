@@ -10,10 +10,22 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(message_filters REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(PCL REQUIRED)
 
 add_executable(camera_lidar_sync src/camera_lidar_sync.cpp)
+
+target_include_directories(camera_lidar_sync PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${PCL_INCLUDE_DIRS}
+)
 
 # Link libraries
 ament_target_dependencies(camera_lidar_sync
@@ -22,11 +34,15 @@ ament_target_dependencies(camera_lidar_sync
   message_filters
   cv_bridge
   OpenCV
+  pcl_conversions
+  pcl_ros
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
 
-target_include_directories(camera_lidar_sync PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+target_link_libraries(camera_lidar_sync
+  ${PCL_LIBRARIES}
 )
 
 # Install targets

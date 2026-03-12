@@ -1,18 +1,19 @@
 #include "pointcloud_clustering_node.h"
 
-pointcloud_clustering_node::pointcloud_clustering_node(/* args */) : Node("pointcloud_clustering_node")
+pointcloud_clustering_node::pointcloud_clustering_node()
+    : Node("pointcloud_clustering_node")
 {
-    // Parameters
     this->declare_parameter("GROUND_THRESHOLD", 0.0);
-    this->declare_parameter("CLUSTER_THRESH", 0.0);
-    this->declare_parameter("CLUSTER_MAX_SIZE", 0);
-    this->declare_parameter("CLUSTER_MIN_SIZE", 0);
+    this->declare_parameter("CLUSTER_THRESH", 0.5);
+    this->declare_parameter("CLUSTER_MAX_SIZE", 100000);
+    this->declare_parameter("CLUSTER_MIN_SIZE", 8);
     this->declare_parameter("USE_PCA_BOX", false);
     this->declare_parameter("DISPLACEMENT_THRESH", 0.0);
     this->declare_parameter("IOU_THRESH", 0.0);
     this->declare_parameter("USE_TRACKING", false);
+    this->declare_parameter("HULL_ALPHA", 1.0);
+    this->declare_parameter("USE_CONCAVE_HULL", false);
 
-    // Get parameters
     this->get_parameter("GROUND_THRESHOLD", GROUND_THRESHOLD);
     this->get_parameter("CLUSTER_THRESH", CLUSTER_THRESH);
     this->get_parameter("CLUSTER_MAX_SIZE", CLUSTER_MAX_SIZE);
@@ -21,180 +22,285 @@ pointcloud_clustering_node::pointcloud_clustering_node(/* args */) : Node("point
     this->get_parameter("DISPLACEMENT_THRESH", DISPLACEMENT_THRESH);
     this->get_parameter("IOU_THRESH", IOU_THRESH);
     this->get_parameter("USE_TRACKING", USE_TRACKING);
+    this->get_parameter("HULL_ALPHA", HULL_ALPHA);
+    this->get_parameter("USE_CONCAVE_HULL", USE_CONCAVE_HULL);
 
-    // Create subscriber
-    sub_points_cloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>("/points_rotated_notground", 10, std::bind(&pointcloud_clustering_node::pointCloudCallback, this, std::placeholders::_1));
-    // hull_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/hull_marker", 10);
-    obstacle_info_publisher_ = this->create_publisher<obstacles_information_msgs::msg::ObstacleCollection>("/obstacle_info", 10);
+    sub_points_cloud_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        "/velodyne_points_rotated_notground",
+        rclcpp::SensorDataQoS(),
+        std::bind(&pointcloud_clustering_node::pointCloudCallback, this, std::placeholders::_1));
 
-    // Create point processor
-    obstacle_detector = std::make_shared<lidar_obstacle_detector::ObstacleDetector<pcl::PointXYZ>>();
+    hull_publisher_ =
+        this->create_publisher<visualization_msgs::msg::MarkerArray>("/hull_marker", 10);
 
-    RCLCPP_INFO(this->get_logger(), "\033[1;32m----> lidar3d_Clustering_node initialized.\033[0m");
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> GROUND_THRESHOLD: %f\033[0m", GROUND_THRESHOLD);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> CLUSTER_THRESH: %f\033[0m", CLUSTER_THRESH);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> CLUSTER_MAX_SIZE: %d\033[0m", CLUSTER_MAX_SIZE);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> CLUSTER_MIN_SIZE: %d\033[0m", CLUSTER_MIN_SIZE);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> DISPLACEMENT_THRESH: %f\033[0m", DISPLACEMENT_THRESH);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> IOU_THRESH: %f\033[0m", IOU_THRESH);
-    RCLCPP_INFO(this->get_logger(), "\033[1;34m----> USE_TRACKING: %d\033[0m", USE_TRACKING);
+    obstacle_info_publisher_ =
+        this->create_publisher<obstacles_information_msgs::msg::ObstacleCollection>("/obstacle_info", 10);
+
+    obstacle_detector_ =
+        std::make_shared<lidar_obstacle_detector::ObstacleDetector<pcl::PointXYZ>>();
+
+    input_cloud_.reset(new pcl::PointCloud<pcl::PointXYZ>());
+
+    obstacle_collection_.obstacles.reserve(128);
+
+    RCLCPP_INFO(this->get_logger(), "----> pointcloud_clustering_node initialized");
+    RCLCPP_INFO(this->get_logger(), "----> GROUND_THRESHOLD: %.3f", GROUND_THRESHOLD);
+    RCLCPP_INFO(this->get_logger(), "----> CLUSTER_THRESH: %.3f", CLUSTER_THRESH);
+    RCLCPP_INFO(this->get_logger(), "----> CLUSTER_MAX_SIZE: %d", CLUSTER_MAX_SIZE);
+    RCLCPP_INFO(this->get_logger(), "----> CLUSTER_MIN_SIZE: %d", CLUSTER_MIN_SIZE);
+    RCLCPP_INFO(this->get_logger(), "----> DISPLACEMENT_THRESH: %.3f", DISPLACEMENT_THRESH);
+    RCLCPP_INFO(this->get_logger(), "----> IOU_THRESH: %.3f", IOU_THRESH);
+    RCLCPP_INFO(this->get_logger(), "----> USE_TRACKING: %d", USE_TRACKING);
+    RCLCPP_INFO(this->get_logger(), "----> USE_CONCAVE_HULL: %d", USE_CONCAVE_HULL);
+    RCLCPP_INFO(this->get_logger(), "----> HULL_ALPHA: %.3f", HULL_ALPHA);
 }
 
-pointcloud_clustering_node::~pointcloud_clustering_node()
+pointcloud_clustering_node::~pointcloud_clustering_node() {}
+
+void pointcloud_clustering_node::pointCloudCallback(
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
-}
+    input_cloud_->clear();
+    pcl::fromROSMsg(*msg, *input_cloud_);
 
-// Point Cloud callback
-void pointcloud_clustering_node::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
-{
-
-    // Convert ROS PointCloud2 to PCL PointCloud
-    pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg(*msg, *input_cloud);
-
-    // Check if the input cloud is empty
-    if (input_cloud->empty())
+    if (input_cloud_->empty())
     {
-        std::cout << red << "Received empty point cloud" << reset << std::endl;
-        imaginaryObstacle();
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                             "Received empty point cloud");
+        imaginaryObstacle(msg->header);
         return;
     }
 
     try
     {
-        auto cloud_clusters = obstacle_detector->clustering(input_cloud, CLUSTER_THRESH, CLUSTER_MIN_SIZE, CLUSTER_MAX_SIZE);
+        auto cloud_clusters = obstacle_detector_->clustering(
+            input_cloud_, static_cast<float>(CLUSTER_THRESH),
+            CLUSTER_MIN_SIZE, CLUSTER_MAX_SIZE);
+
         auto &clusters = cloud_clusters.first;
 
         if (!clusters.empty())
         {
-            // std::cout << green << "Number of clusters: " << clusters.size() << reset << std::endl;
-            convex_hull(clusters);
+            buildAndPublishHulls(clusters, msg->header);
         }
         else
         {
-            std::cout << yellow << "No clusters found" << reset << std::endl;
-            imaginaryObstacle();
+            imaginaryObstacle(msg->header);
         }
     }
     catch (const std::exception &e)
     {
-        std::cout << red << "Error processing point cloud: " << e.what() << reset << std::endl;
+        RCLCPP_ERROR(this->get_logger(), "Error processing point cloud: %s", e.what());
+        imaginaryObstacle(msg->header);
     }
 }
 
-void pointcloud_clustering_node::convex_hull(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> cloud_clusters)
+void pointcloud_clustering_node::buildAndPublishHulls(
+    const std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &cloud_clusters,
+    const std_msgs::msg::Header &header)
 {
     visualization_msgs::msg::MarkerArray hull_markers;
-    obstacle_collection.obstacles.clear();
+    hull_markers.markers.reserve(cloud_clusters.size());
 
-    obstacle_collection.header.stamp = rclcpp::Clock{}.now();
-    obstacle_collection.header.frame_id = "velodyne";
+    obstacle_collection_.obstacles.clear();
+    obstacle_collection_.header = header;
 
-    int index = 0; // Declare an index variable
-    for (auto &cluster : cloud_clusters)
+    const rclcpp::Time stamp = this->now();
+
+#ifdef _OPENMP
+#pragma omp parallel
     {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr convexHull(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::ConvexHull<pcl::PointXYZ> hull;
-        hull.setInputCloud(cluster);
-        hull.setDimension(2);
-        hull.reconstruct(*convexHull);
+        std::vector<visualization_msgs::msg::Marker> local_markers;
+        std::vector<obstacles_information_msgs::msg::Obstacle> local_obstacles;
 
-        if (convexHull->empty())
+#pragma omp for nowait
+        for (int i = 0; i < static_cast<int>(cloud_clusters.size()); ++i)
         {
-            std::cout << red << "Convex hull is empty" << reset << std::endl;
-            continue;
-        }
-        if (hull.getDimension() == 2)
-        {
-            // std::vector<geometry_msgs::msg::Point> hull_points;
+            const auto &cluster = cloud_clusters[i];
+            if (!cluster || cluster->empty())
+                continue;
+
+            pcl::PointCloud<pcl::PointXYZ>::Ptr hull_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+
+            if (USE_CONCAVE_HULL)
+            {
+                pcl::ConcaveHull<pcl::PointXYZ> hull;
+                hull.setInputCloud(cluster);
+                hull.setDimension(2);
+                hull.setAlpha(HULL_ALPHA);
+                hull.reconstruct(*hull_cloud);
+            }
+            else
+            {
+                pcl::ConvexHull<pcl::PointXYZ> hull;
+                hull.setInputCloud(cluster);
+                hull.setDimension(2);
+                hull.reconstruct(*hull_cloud);
+            }
+
+            if (!hull_cloud || hull_cloud->points.size() < 3)
+                continue;
+
             obstacles_information_msgs::msg::Obstacle obstacle;
             geometry_msgs::msg::Polygon polygon;
+            polygon.points.reserve(hull_cloud->points.size() + 1);
 
-            for (const auto &point : convexHull->points)
+            visualization_msgs::msg::Marker marker;
+            marker.header = header;
+            marker.header.stamp = stamp;
+            marker.ns = "hull";
+            marker.id = i;
+            marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.scale.x = 0.07;
+            marker.color.r = 1.0;
+            marker.color.g = 1.0;
+            marker.color.b = 1.0;
+            marker.color.a = 1.0;
+            marker.points.reserve(hull_cloud->points.size() + 1);
+
+            for (const auto &point : hull_cloud->points)
             {
-                geometry_msgs::msg::Point32 p;
+                geometry_msgs::msg::Point32 p32;
+                p32.x = point.x;
+                p32.y = point.y;
+                p32.z = 0.0f;
+                polygon.points.push_back(p32);
+
+                geometry_msgs::msg::Point p;
                 p.x = point.x;
                 p.y = point.y;
                 p.z = 0.0;
-                polygon.points.push_back(p);
-
-                // geometry_msgs::msg::Point hull_point;
-                // hull_point.x = p.x;
-                // hull_point.y = p.y;
-                // hull_point.z = p.z;
-                // hull_points.push_back(hull_point);
+                marker.points.push_back(p);
             }
 
-            // Close the loop
-            // hull_points.push_back(hull_points.front());
+            // close polygon and marker strip
             polygon.points.push_back(polygon.points.front());
+            marker.points.push_back(marker.points.front());
 
             obstacle.polygon = polygon;
-            obstacle.id = index;
+            obstacle.id = i;
             obstacle.type = "NONE";
 
-            obstacle_collection.obstacles.push_back(obstacle);
+            local_obstacles.push_back(std::move(obstacle));
+            local_markers.push_back(std::move(marker));
+        }
 
-            // Create a marker for the convex hull
-            // visualization_msgs::msg::Marker hull_marker;
-            // hull_marker.header.frame_id = "velodyne";
-            // hull_marker.header.stamp = this->now();
-            // hull_marker.ns = "hull";
-            // hull_marker.id = index;
-            // hull_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
-            // hull_marker.action = visualization_msgs::msg::Marker::ADD;
-            // hull_marker.scale.x = 0.07;
-            // hull_marker.color.r = 1.0;
-            // hull_marker.color.g = 1.0;
-            // hull_marker.color.b = 1.0;
-            // hull_marker.color.a = 1.0;
-            // hull_marker.points = hull_points;
+#pragma omp critical
+        {
+            obstacle_collection_.obstacles.insert(
+                obstacle_collection_.obstacles.end(),
+                local_obstacles.begin(), local_obstacles.end());
 
-            // hull_markers.markers.push_back(hull_marker);
-
-            index++;
+            hull_markers.markers.insert(
+                hull_markers.markers.end(),
+                local_markers.begin(), local_markers.end());
         }
     }
-    // Publish the convex hull
-    if (!obstacle_collection.obstacles.empty())
+#else
+    for (int i = 0; i < static_cast<int>(cloud_clusters.size()); ++i)
     {
-        // hull_publisher_->publish(hull_markers);
-        // std::cout << yellow << "Convex hull markers published" << reset << std::endl;
-        // size of the obstacle collection
-        // std::cout << yellow << "Obstacle collection size: " << obstacle_collection.obstacles.size() << reset << std::endl;
-        obstacle_info_publisher_->publish(obstacle_collection);
+        const auto &cluster = cloud_clusters[i];
+        if (!cluster || cluster->empty())
+            continue;
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr hull_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+
+        if (USE_CONCAVE_HULL)
+        {
+            pcl::ConcaveHull<pcl::PointXYZ> hull;
+            hull.setInputCloud(cluster);
+            hull.setDimension(2);
+            hull.setAlpha(HULL_ALPHA);
+            hull.reconstruct(*hull_cloud);
+        }
+        else
+        {
+            pcl::ConvexHull<pcl::PointXYZ> hull;
+            hull.setInputCloud(cluster);
+            hull.setDimension(2);
+            hull.reconstruct(*hull_cloud);
+        }
+
+        if (!hull_cloud || hull_cloud->points.size() < 3)
+            continue;
+
+        obstacles_information_msgs::msg::Obstacle obstacle;
+        geometry_msgs::msg::Polygon polygon;
+        polygon.points.reserve(hull_cloud->points.size() + 1);
+
+        visualization_msgs::msg::Marker marker;
+        marker.header = header;
+        marker.header.stamp = stamp;
+        marker.ns = "hull";
+        marker.id = i;
+        marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::msg::Marker::ADD;
+        marker.scale.x = 0.07;
+        marker.color.r = 1.0;
+        marker.color.g = 1.0;
+        marker.color.b = 1.0;
+        marker.color.a = 1.0;
+        marker.points.reserve(hull_cloud->points.size() + 1);
+
+        for (const auto &point : hull_cloud->points)
+        {
+            geometry_msgs::msg::Point32 p32;
+            p32.x = point.x;
+            p32.y = point.y;
+            p32.z = 0.0f;
+            polygon.points.push_back(p32);
+
+            geometry_msgs::msg::Point p;
+            p.x = point.x;
+            p.y = point.y;
+            p.z = 0.0;
+            marker.points.push_back(p);
+        }
+
+        polygon.points.push_back(polygon.points.front());
+        marker.points.push_back(marker.points.front());
+
+        obstacle.polygon = polygon;
+        obstacle.id = i;
+        obstacle.type = "NONE";
+
+        obstacle_collection_.obstacles.push_back(std::move(obstacle));
+        hull_markers.markers.push_back(std::move(marker));
+    }
+#endif
+
+    if (!obstacle_collection_.obstacles.empty())
+    {
+        hull_publisher_->publish(hull_markers);
+        obstacle_info_publisher_->publish(obstacle_collection_);
     }
     else
     {
-        imaginaryObstacle();
+        imaginaryObstacle(header);
     }
 }
 
-void pointcloud_clustering_node::imaginaryObstacle()
+void pointcloud_clustering_node::imaginaryObstacle(const std_msgs::msg::Header &header)
 {
-    // This function can be implemented to create imaginary obstacles for convenience
-    // > If clustering dont detect any obstacle, this function can create a static obstacle far from the robot
-    // > Or is useful if pointcloud is empty
-    obstacle_collection.obstacles.clear();
-    obstacle_collection.header.stamp = rclcpp::Clock{}.now();
-    obstacle_collection.header.frame_id = "base_link";
+    obstacle_collection_.obstacles.clear();
+    obstacle_collection_.header = header;
 
     obstacles_information_msgs::msg::Obstacle obstacle;
     geometry_msgs::msg::Polygon polygon;
     geometry_msgs::msg::Point32 p;
-    p.x = 5000.0;  // <--- 5km in front of the robot
-    p.y = 0.0;
-    p.z = 0.0;
+
+    p.x = 5000.0f;
+    p.y = 0.0f;
+    p.z = 0.0f;
+
     polygon.points.push_back(p);
     obstacle.polygon = polygon;
     obstacle.id = 1;
     obstacle.type = "NONE";
-    
-    // Add the imaginary obstacle to the collection
-    obstacle_collection.obstacles.push_back(obstacle);
-    std::cout << yellow << "Imaginary Obstacle published " << reset << std::endl;
-    obstacle_info_publisher_->publish(obstacle_collection);
 
+    obstacle_collection_.obstacles.push_back(obstacle);
+    obstacle_info_publisher_->publish(obstacle_collection_);
 }
 
 int main(int argc, char **argv)

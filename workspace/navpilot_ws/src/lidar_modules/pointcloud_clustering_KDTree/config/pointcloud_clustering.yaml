@@ -1,0 +1,12 @@
+pointcloud_clustering_node:
+  ros__parameters:
+    GROUND_THRESHOLD: 0.03
+    CLUSTER_THRESH: 0.7
+    CLUSTER_MAX_SIZE: 1500
+    CLUSTER_MIN_SIZE: 10
+    USE_PCA_BOX: false
+    DISPLACEMENT_THRESH: 1.2
+    IOU_THRESH: 0.7
+    USE_TRACKING: true
+    USE_CONCAVE_HULL: true # Enable for tighter fit around obstacles
+    HULL_ALPHA: 1.0 # Lower values (0.5-2.0) = tighter fit, higher values = looser fit

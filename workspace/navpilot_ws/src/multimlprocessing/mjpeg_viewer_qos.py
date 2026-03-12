@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 
 class MjpegMultiCameraViewer(Node):
@@ -50,6 +51,9 @@ class MjpegMultiCameraViewer(Node):
         self.scale_factor = self.get_parameter('scale_factor').value
         self.max_combined_height = self.get_parameter('max_combined_height').value
         
+        qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST)
+
+
         # Create subscribers for each camera
         self.subscribers = []
         for cam_id in range(self.num_cameras):
@@ -58,7 +62,7 @@ class MjpegMultiCameraViewer(Node):
                 Image,
                 topic,
                 lambda msg, id=cam_id: self.image_callback(msg, id),
-                10
+                qos_profile=qos
             )
             self.subscribers.append(sub)
             self.get_logger().info(f'Subscribed to {topic}')

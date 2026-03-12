@@ -4,30 +4,47 @@
 multi_camera_sync:
   ros__parameters:
     # Camera topics - full input topic paths
+    # cameras:
+    #   [
+    #     "/racecar/camera/camera_0/image_raw",
+    #     "/racecar/camera/camera_1/image_raw",
+    #     "/racecar/camera/camera_2/image_raw",
+    #     "/racecar/camera/camera_3/image_raw",
+    #     "/racecar/camera/camera_4/image_raw",
+    #   ]
     cameras:
       [
         "/racecar/camera/camera_0/image_raw",
         "/racecar/camera/camera_1/image_raw",
         "/racecar/camera/camera_2/image_raw",
-        "/racecar/camera/camera_3/image_raw",
       ]
-
     # Suffix added to output topics (e.g., /camera_1_sync, /raw/camera_front_sync)
     sync_suffix: "_sync"
 
     # Synchronization settings
     queue_size: 10 # Message queue size for synchronizer
+    # Camera subscription QoS: "normal" (default SensorDataQoS) or "qos" (BEST_EFFORT, KEEP_LAST, depth=1 to match mjpeg viewers)
+    camera_qos_mode: "normal"
 
     # LiDAR settings
-    use_lidar: false # Enable LiDAR synchronization with cameras
-    lidar_topic_in: "/lidar/points" # Input LiDAR topic
-    lidar_topic_out: "/lidar/points_sync" # Output synchronized LiDAR topic
+    use_lidar: true # Enable LiDAR synchronization with cameras
+    lidar_topic_in: "/velodyne_points" # Input LiDAR topic
+    lidar_topic_out: "/velodyne_points_sync" # Output synchronized LiDAR topic
+    save_lidar_bin: true # Enable saving synchronized LiDAR to bin file
+    lidar_output_dir: "/workspace/navpilot_ws/lidar_bins" # Where to save LiDAR .bin (same interval as cameras)
 
     # Image saving settings
     save_images: true # Enable saving synchronized frames to disk
     output_dir: "/workspace/navpilot_ws" # Base directory for saved images
-    save_interval: 5 # Save every N frames (e.g., 5 = save every 5th frame)
+    save_interval: 3 # Save every N frames (e.g., 5 = save every 5th frame)
     image_encoding: "mjpeg" # Image encoding: "mjpeg", "jpeg", "rgb8", "bgr8", "" (auto-detect)
     # Output structure:
     #   output_dir/individual/  - Individual camera frames (camera_1_00001.jpg, etc.)
     #   output_dir/combined/    - Combined horizontal view (combined_00001.jpg)
+
+    # TF settings
+    use_tf: false # Enable TF synchronization
+    tf_global_frame: "map"
+    tf_lidar_frame: "velodyne"
+    tf_output_dir: "/workspace/navpilot_ws/tf_yaml" # Where to save TF yaml files
+

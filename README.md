@@ -46,6 +46,12 @@ chmod +x setup_file.sh
 ./setup_file.sh
 ```
 
+setup network:
+sudo ip addr add 192.168.1.100/24 dev enp2s0
+
+sudo iptables -I INPUT -p udp --dport 2368 -j ACCEPT
+sudo sysctl -w net.ipv4.conf.enp2s0.rp_filter=0
+
 ## → Sensor Launchers
 
 Launch individual or combined sensor configurations as needed:

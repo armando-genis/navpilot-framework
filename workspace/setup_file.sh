@@ -99,6 +99,8 @@ colcon build --packages-select map_visualizer
 colcon build --packages-select waypoints_routing
 colcon build --packages-select path_planning_dynamic
 colcon build --packages-select pointcloud_clustering
+colcon build --packages-select pointcloud_clustering_KDTree
 colcon build --packages-select pointcloud_rotation
 colcon build --packages-select yaw_test
 colcon build --packages-select local_path_planning
+colcon build --packages-select camera_lidar_sync

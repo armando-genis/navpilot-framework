@@ -22,13 +22,18 @@ constexpr uint32_t MAGIC = 0x52475731; // 'RGW1'
 constexpr uint8_t TOPIC_IMAGE = 1;
 constexpr uint8_t TOPIC_INT32 = 2;
 
+#pragma pack(push, 1)
 struct Header
 {
   uint32_t magic_be;
   uint8_t topic_id;
-  uint8_t rsv[3];
+  uint8_t camera_id;
+  uint8_t rsv[2];
   uint32_t payload_len_be;
 };
+#pragma pack(pop)
+
+static_assert(sizeof(Header) == 12, "Header must be 12 bytes");
 
 static bool recv_all(int fd, uint8_t* data, size_t len)
 {
@@ -49,14 +54,35 @@ public:
   : Node("tcp_gateway_receiver")
   {
     this->declare_parameter<int>("listen_port", 5001);
-    this->declare_parameter<std::string>("image_out_topic", "/image_remote");
+    this->declare_parameter<std::vector<std::string>>(
+      "camera_topics",
+      {
+        "/racecar/camera/camera_0/image_raw",
+        "/racecar/camera/camera_1/image_raw",
+        "/racecar/camera/camera_2/image_raw"
+      });
     this->declare_parameter<std::string>("int_out_topic", "/number_remote");
 
     listen_port_ = this->get_parameter("listen_port").as_int();
-    image_out_topic_ = this->get_parameter("image_out_topic").as_string();
+    camera_topics_ = this->get_parameter("camera_topics").as_string_array();
     int_out_topic_ = this->get_parameter("int_out_topic").as_string();
 
-    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>(image_out_topic_, rclcpp::SensorDataQoS());
+    for (size_t i = 0; i < camera_topics_.size(); ++i)
+    {
+      auto pub =
+        this->create_publisher<sensor_msgs::msg::Image>(
+          camera_topics_[i],
+          rclcpp::SensorDataQoS());
+
+      image_pubs_.push_back(pub);
+
+      RCLCPP_INFO(get_logger(),
+        "Publishing camera %zu on %s",
+        i,
+        camera_topics_[i].c_str());
+    }
+
+
     int_pub_ = this->create_publisher<std_msgs::msg::Int32>(int_out_topic_, rclcpp::QoS(10));
 
     running_.store(true);
@@ -120,6 +146,7 @@ private:
         const uint32_t magic = ntohl(h.magic_be);
         const uint32_t payload_len = ntohl(h.payload_len_be);
         const uint8_t topic_id = h.topic_id;
+        const uint8_t camera_id = h.camera_id;
 
         if (magic != MAGIC) {
           RCLCPP_WARN(get_logger(), "Bad magic. Dropping connection.");
@@ -144,7 +171,13 @@ private:
         if (topic_id == TOPIC_IMAGE) {
           sensor_msgs::msg::Image msg;
           image_ser_.deserialize_message(&serialized, &msg);
-          image_pub_->publish(msg);
+          if (camera_id < image_pubs_.size()) {
+            image_pubs_[camera_id]->publish(msg);
+          } else {
+            RCLCPP_WARN(get_logger(),
+              "Invalid camera_id=%u",
+              camera_id);
+          }
         } else if (topic_id == TOPIC_INT32) {
           std_msgs::msg::Int32 msg;
           int_ser_.deserialize_message(&serialized, &msg);
@@ -162,14 +195,14 @@ private:
 
 private:
   int listen_port_{5001};
-  std::string image_out_topic_;
   std::string int_out_topic_;
 
   std::atomic<bool> running_{false};
   std::thread net_thread_;
 
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+  std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> image_pubs_;
   rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr int_pub_;
+  std::vector<std::string> camera_topics_;
 
   rclcpp::Serialization<sensor_msgs::msg::Image> image_ser_;
   rclcpp::Serialization<std_msgs::msg::Int32> int_ser_;

@@ -14,11 +14,24 @@ Is recommended to use when multiple cameras are used in the same application. us
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
 
+// tf
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
+
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
+// State
+#include "State.h"
 
 #include <filesystem>
 #include <fstream>
@@ -36,12 +49,13 @@ public:
   using CloudMsg = sensor_msgs::msg::PointCloud2;
 
   explicit MultiCameraSync(const rclcpp::NodeOptions& opts = rclcpp::NodeOptions())
-  : rclcpp::Node("multi_camera_sync", opts)
+  : rclcpp::Node("multi_camera_sync", opts), tf2_buffer(this->get_clock()), tf2_listener(tf2_buffer)
   {
     // Params
     this->declare_parameter<std::vector<std::string>>("cameras", std::vector<std::string>{"/camera_0", "/camera_1"});
     this->declare_parameter<std::string>("sync_suffix", "_sync");
     this->declare_parameter<int>("queue_size", 10);
+    this->declare_parameter<std::string>("camera_qos_mode", "normal");  // "normal" or "qos"
 
     this->declare_parameter<bool>("use_lidar", false);
     this->declare_parameter<std::string>("lidar_topic_in", "/lidar/points");
@@ -53,9 +67,20 @@ public:
     this->declare_parameter<int>("save_interval", 5);
     this->declare_parameter<std::string>("image_encoding", "");  // e.g., "mjpeg", "rgb8", "" for auto-detect
 
+    // LiDAR bin saving params (uses same save_interval as cameras)
+    this->declare_parameter<bool>("save_lidar_bin", false);
+    this->declare_parameter<std::string>("lidar_output_dir", "/tmp/lidar_bins");
+
+    // TF params
+    this->declare_parameter<bool>("use_tf", false);
+    this->declare_parameter<std::string>("tf_global_frame", "map");
+    this->declare_parameter<std::string>("tf_lidar_frame", "velodyne");
+    this->declare_parameter<std::string>("tf_output_dir", "/tmp/tf_bins");
+
     this->get_parameter("cameras", cameras_);
     this->get_parameter("sync_suffix", sync_suffix_);
     this->get_parameter("queue_size", queue_size_);
+    this->get_parameter("camera_qos_mode", camera_qos_mode_);
 
     this->get_parameter("use_lidar", use_lidar_);
     this->get_parameter("lidar_topic_in", lidar_topic_in_);
@@ -66,6 +91,14 @@ public:
     this->get_parameter("save_interval", save_interval_);
     this->get_parameter("image_encoding", image_encoding_);
 
+    this->get_parameter("save_lidar_bin", save_lidar_bin_);
+    this->get_parameter("lidar_output_dir", lidar_output_dir_);
+
+    this->get_parameter("use_tf", use_tf_);
+    this->get_parameter("tf_global_frame", tf_global_frame_);
+    this->get_parameter("tf_lidar_frame", tf_lidar_frame_);
+    this->get_parameter("tf_output_dir", tf_output_dir_);
+
     num_cams_ = static_cast<int>(cameras_.size());
     if (num_cams_ <= 0) throw std::runtime_error("cameras list must not be empty");
     if (num_cams_ > 5) throw std::runtime_error("This implementation supports 1..5 cameras");
@@ -73,36 +106,159 @@ public:
     qos_ = rclcpp::SensorDataQoS();
     rmw_qos_ = qos_.get_rmw_qos_profile();
 
-    // Create output directories if saving images
-    if (save_images_) {
+    // Camera subscription QoS: "normal" (SensorDataQoS) or "qos" (BEST_EFFORT, KEEP_LAST, depth=1)
+    if (camera_qos_mode_ == "qos") {
+      qos_camera_ = rclcpp::QoS(1)
+        .reliability(rclcpp::ReliabilityPolicy::BestEffort)
+        .history(rclcpp::HistoryPolicy::KeepLast);
+      RCLCPP_INFO(get_logger(), "Camera QoS: qos (BEST_EFFORT, KEEP_LAST, depth=1)");
+    } else {
+      qos_camera_ = rclcpp::SensorDataQoS();
+      RCLCPP_INFO(get_logger(), "Camera QoS: normal (SensorDataQoS)");
+    }
+    rmw_qos_camera_ = qos_camera_.get_rmw_qos_profile();
+
+    // Create output directories if saving images or LiDAR
+    if (save_images_ || save_lidar_bin_ || use_tf_) {
       init_output_dirs();
     }
 
     init_pubs();
     init_subs_and_sync();
 
-    RCLCPP_INFO(get_logger(), "Ready: num_cams=%d, use_lidar=%s, save_images=%s",
-                num_cams_, use_lidar_ ? "true" : "false", save_images_ ? "true" : "false");
+    RCLCPP_INFO(get_logger(), "Ready: num_cams=%d, use_lidar=%s, save_images=%s, save_lidar_bin=%s",
+                num_cams_, use_lidar_ ? "true" : "false", save_images_ ? "true" : "false", save_lidar_bin_ ? "true" : "false");
     for (const auto& cam : cameras_) {
       RCLCPP_INFO(get_logger(), "  - %s", cam.c_str());
     }
     if (save_images_) {
-      RCLCPP_INFO(get_logger(), "Saving every %d frames to: %s", save_interval_, output_dir_.c_str());
+      RCLCPP_INFO(get_logger(), "Saving images every %d frames to: %s", save_interval_, output_dir_.c_str());
     }
+    if (save_lidar_bin_) {
+      RCLCPP_INFO(get_logger(), "Saving LiDAR every %d frames (same as cameras) to: %s", save_interval_, lidar_output_dir_.c_str());
+    }
+    
+    car_state_ = std::make_shared<State>();
   }
 
 private:
+
+  // pose estimation
+  bool getCurrentRobotState(const rclcpp::Time& stamp)
+  {
+    if (!use_tf_) return false;
+
+    try
+    {
+      geometry_msgs::msg::TransformStamped tf_stamped =
+          tf2_buffer.lookupTransform(
+              tf_global_frame_,
+              tf_lidar_frame_,
+              tf2::TimePointZero);
+
+      car_state_->x = tf_stamped.transform.translation.x;
+      car_state_->y = tf_stamped.transform.translation.y;
+      car_state_->z = tf_stamped.transform.translation.z;
+
+      tf2::Quaternion quat;
+      tf2::fromMsg(tf_stamped.transform.rotation, quat);
+
+      double roll, pitch, yaw;
+      tf2::Matrix3x3(quat).getRPY(roll, pitch, yaw);
+
+      car_state_->roll    = roll;
+      car_state_->pitch   = pitch;
+      car_state_->heading = yaw;
+
+      return true;
+    }
+    catch (tf2::TransformException &ex)
+    {
+      RCLCPP_WARN(get_logger(), "TF lookup failed: %s", ex.what());
+      return false;
+    }
+  }
+
+  void init_tf_yaml()
+  {
+    if (!use_tf_) return;
+    if (tf_yaml_initialized_) return;
+
+    std::ofstream file(tf_yaml_file_, std::ios::out);
+    if (!file.is_open()) {
+      RCLCPP_ERROR(get_logger(), "Failed to create TF YAML file: %s", tf_yaml_file_.c_str());
+      return;
+    }
+
+    file << "scenes:\n";
+    file.close();
+
+    tf_yaml_initialized_ = true;
+  } 
+
+  void save_tf_yaml(int save_num)
+  {
+    if (!use_tf_ || save_num < 0) return;
+
+    if (!tf_yaml_initialized_) {
+      init_tf_yaml();
+    }
+
+    std::ofstream file(tf_yaml_file_, std::ios::app);
+    if (!file.is_open()) {
+      RCLCPP_ERROR(get_logger(), "Failed to open TF YAML file: %s", tf_yaml_file_.c_str());
+      return;
+    }
+
+    std::string frame_str = format_frame_number(save_num);
+
+    file << "  - scene: " << frame_str << "\n";
+    file << "    pose:\n";
+    file << "      x: "       << car_state_->x       << "\n";
+    file << "      y: "       << car_state_->y       << "\n";
+    file << "      z: "       << car_state_->z       << "\n";
+    file << "      roll: "    << car_state_->roll    << "\n";
+    file << "      pitch: "   << car_state_->pitch   << "\n";
+    file << "      heading: " << car_state_->heading << "\n\n";
+
+    file.close();
+
+    RCLCPP_INFO(get_logger(), "Saved TF YAML scene %d", save_num);
+  }
+
   // ---------------- Output directories ----------------
   void init_output_dirs()
   {
-    individual_dir_ = output_dir_ + "/individual";
-    combined_dir_ = output_dir_ + "/combined";
+    if (save_images_) {
+      individual_dir_ = output_dir_ + "/individual";
+      combined_dir_ = output_dir_ + "/combined";
 
-    std::filesystem::create_directories(individual_dir_);
-    std::filesystem::create_directories(combined_dir_);
+      if (!std::filesystem::create_directories(individual_dir_) && !std::filesystem::exists(individual_dir_)) {
+        RCLCPP_ERROR(get_logger(), "Failed to create image output dir: %s", individual_dir_.c_str());
+      }
+      if (!std::filesystem::create_directories(combined_dir_) && !std::filesystem::exists(combined_dir_)) {
+        RCLCPP_ERROR(get_logger(), "Failed to create combined output dir: %s", combined_dir_.c_str());
+      }
+      RCLCPP_INFO(get_logger(), "Image output dirs: %s, %s",
+                  individual_dir_.c_str(), combined_dir_.c_str());
+    }
 
-    RCLCPP_INFO(get_logger(), "Created output dirs: %s, %s",
-                individual_dir_.c_str(), combined_dir_.c_str());
+    if (save_lidar_bin_) {
+      if (!std::filesystem::create_directories(lidar_output_dir_) && !std::filesystem::exists(lidar_output_dir_)) {
+        RCLCPP_ERROR(get_logger(), "Failed to create LiDAR output dir: %s", lidar_output_dir_.c_str());
+      }
+      RCLCPP_INFO(get_logger(), "LiDAR output dir: %s", lidar_output_dir_.c_str());
+    }
+
+    if (use_tf_) {
+      if (!std::filesystem::create_directories(tf_output_dir_) &&
+          !std::filesystem::exists(tf_output_dir_)) {
+        RCLCPP_ERROR(get_logger(), "Failed to create TF output dir: %s", tf_output_dir_.c_str());
+      }
+      RCLCPP_INFO(get_logger(), "TF output dir: %s", tf_output_dir_.c_str());
+      tf_yaml_file_ = tf_output_dir_ + "/poses.yaml";
+      init_tf_yaml();
+    }
   }
 
   // ---------------- Image saving helpers ----------------
@@ -219,14 +375,21 @@ private:
     return combined;
   }
 
-  void save_synchronized_images(const std::vector<ImageMsg::ConstSharedPtr>& imgs)
+  // Single place for "should we save this sync event?" logic. Returns save_num (1-based index) or -1.
+  int try_advance_save_frame()
   {
-    if (!save_images_) return;
-
     frame_count_++;
-    if (frame_count_ % save_interval_ != 0) return;
+    if (frame_count_ % save_interval_ != 0) return -1;
+    return frame_count_ / save_interval_;
+  }
 
-    int save_num = frame_count_ / save_interval_;
+  int save_synchronized_images(const std::vector<ImageMsg::ConstSharedPtr>& imgs)
+  {
+    if (!save_images_) return -1;
+
+    int save_num = try_advance_save_frame();
+    if (save_num < 0) return -1;
+
     std::string frame_str = format_frame_number(save_num);
 
     std::vector<cv::Mat> cv_images;
@@ -261,7 +424,35 @@ private:
       cv::imwrite(filename, combined);
     }
 
-    RCLCPP_DEBUG(get_logger(), "Saved frame %d", save_num);
+    RCLCPP_INFO(get_logger(), "Saved frame %d to %s (and combined)", save_num, individual_dir_.c_str());
+    return save_num;
+  }
+
+  void save_lidar_bin(const CloudMsg::ConstSharedPtr& cloud_msg, int save_num)
+  {
+    if (!save_lidar_bin_ || save_num < 0) return;
+
+    std::string frame_str = format_frame_number(save_num);
+    std::string filename = lidar_output_dir_ + "/" + frame_str + ".bin";
+
+    // Convert ROS PointCloud2 to PCL
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::fromROSMsg(*cloud_msg, *cloud);
+
+    // Save as binary file (x, y, z, intensity)
+    std::ofstream output_file(filename, std::ios::binary);
+    if (!output_file.is_open()) {
+      RCLCPP_ERROR(get_logger(), "Failed to open LiDAR bin file: %s", filename.c_str());
+      return;
+    }
+
+    for (const auto& point : cloud->points) {
+      float data[4] = {point.x, point.y, point.z, point.intensity};
+      output_file.write(reinterpret_cast<const char*>(data), sizeof(data));
+    }
+    output_file.close();
+
+    RCLCPP_INFO(get_logger(), "Saved LiDAR bin %d (%zu points) to %s", save_num, cloud->points.size(), filename.c_str());
   }
 
   // ---------------- Publishers ----------------
@@ -297,7 +488,7 @@ private:
       if (!use_lidar_) {
         // Sin lidar: republish directo (sin message_filters)
         sub_single_ros_ = this->create_subscription<ImageMsg>(
-          cameras_[0], qos_,
+          cameras_[0], qos_camera_,
           [this](const ImageMsg::ConstSharedPtr msg) {
             image_pubs_[0]->publish(*msg);
             save_synchronized_images({msg});
@@ -308,7 +499,7 @@ private:
 
       // Con lidar: usa message_filters para (Image, Cloud)
       sub_single_mf_ = std::make_unique<message_filters::Subscriber<ImageMsg>>(
-        this, cameras_[0], rmw_qos_);
+        this, cameras_[0], rmw_qos_camera_);
       RCLCPP_INFO(get_logger(), "SUB: %s", cameras_[0].c_str());
 
       using PolicyCam1L = message_filters::sync_policies::ApproximateTime<ImageMsg, CloudMsg>;
@@ -325,7 +516,7 @@ private:
     cam_subs_.reserve(num_cams_);
 
     for (int i = 0; i < num_cams_; ++i) {
-      cam_subs_.emplace_back(std::make_unique<message_filters::Subscriber<ImageMsg>>(this, cameras_[i], rmw_qos_));
+      cam_subs_.emplace_back(std::make_unique<message_filters::Subscriber<ImageMsg>>(this, cameras_[i], rmw_qos_camera_));
       RCLCPP_INFO(get_logger(), "SUB: %s", cameras_[i].c_str());
     }
 
@@ -344,12 +535,22 @@ private:
   }
 
   // ---------------- Publish helpers ----------------
-  void publish_images(const std::vector<ImageMsg::ConstSharedPtr>& imgs)
+  int publish_images(const std::vector<ImageMsg::ConstSharedPtr>& imgs)
   {
     for (size_t i = 0; i < imgs.size(); ++i) {
       image_pubs_[i]->publish(*imgs[i]);
     }
-    save_synchronized_images(imgs);
+
+    int sn = save_synchronized_images(imgs);
+
+    if (sn >= 0 && use_tf_) {
+      rclcpp::Time stamp(imgs[0]->header.stamp);
+      if (getCurrentRobotState(stamp)) {
+        save_tf_yaml(sn);
+      }
+    }
+
+    return sn;
   }
 
   // ---------------- Callback functions ----------------
@@ -357,7 +558,17 @@ private:
   {
     image_pubs_[0]->publish(*img0);
     lidar_pub_->publish(*cloud);
-    save_synchronized_images({img0});
+
+    int sn = save_synchronized_images({img0});
+
+    if (sn >= 0) {
+        if (use_tf_) {
+            if (getCurrentRobotState(img0->header.stamp)) {
+                save_tf_yaml(sn);
+            }
+        }
+        save_lidar_bin(cloud, sn);
+    }
   }
 
   void callback_cam2(const ImageMsg::ConstSharedPtr& a, const ImageMsg::ConstSharedPtr& b)
@@ -387,31 +598,35 @@ private:
   void callback_cam2_lidar(const ImageMsg::ConstSharedPtr& a, const ImageMsg::ConstSharedPtr& b,
                            const CloudMsg::ConstSharedPtr& cloud)
   {
-    publish_images({a, b});
+    int sn = publish_images({a, b});
     lidar_pub_->publish(*cloud);
+    if (sn >= 0) save_lidar_bin(cloud, sn);
   }
 
   void callback_cam3_lidar(const ImageMsg::ConstSharedPtr& a, const ImageMsg::ConstSharedPtr& b,
                            const ImageMsg::ConstSharedPtr& c, const CloudMsg::ConstSharedPtr& cloud)
   {
-    publish_images({a, b, c});
+    int sn = publish_images({a, b, c});
     lidar_pub_->publish(*cloud);
+    if (sn >= 0) save_lidar_bin(cloud, sn);
   }
 
   void callback_cam4_lidar(const ImageMsg::ConstSharedPtr& a, const ImageMsg::ConstSharedPtr& b,
                            const ImageMsg::ConstSharedPtr& c, const ImageMsg::ConstSharedPtr& d,
                            const CloudMsg::ConstSharedPtr& cloud)
   {
-    publish_images({a, b, c, d});
+    int sn = publish_images({a, b, c, d});
     lidar_pub_->publish(*cloud);
+    if (sn >= 0) save_lidar_bin(cloud, sn);
   }
 
   void callback_cam5_lidar(const ImageMsg::ConstSharedPtr& a, const ImageMsg::ConstSharedPtr& b,
                            const ImageMsg::ConstSharedPtr& c, const ImageMsg::ConstSharedPtr& d,
                            const ImageMsg::ConstSharedPtr& e, const CloudMsg::ConstSharedPtr& cloud)
   {
-    publish_images({a, b, c, d, e});
+    int sn = publish_images({a, b, c, d, e});
     lidar_pub_->publish(*cloud);
+    if (sn >= 0) save_lidar_bin(cloud, sn);
   }
 
   // ---------------- Camera-only synchronizers ----------------
@@ -505,10 +720,36 @@ private:
   }
 
 private:
+
+  // colors for the terminal
+  std::string green = "\033[1;32m";
+  std::string red = "\033[1;31m";
+  std::string blue = "\033[1;34m";
+  std::string yellow = "\033[1;33m";
+  std::string purple = "\033[1;35m";
+  std::string reset = "\033[0m";
+
+  // tf2 buffer & listener
+  tf2_ros::Buffer tf2_buffer;
+  tf2_ros::TransformListener tf2_listener;
+
+  // State
+  std::shared_ptr<State> car_state_;
+
+    // TF params
+  bool use_tf_{false};
+  std::string tf_global_frame_;
+  std::string tf_lidar_frame_;
+  std::string tf_output_dir_;
+
+  std::string tf_yaml_file_;
+  bool tf_yaml_initialized_{false};
+
   // params
   std::vector<std::string> cameras_;
   std::string sync_suffix_;
   int queue_size_{10};
+  std::string camera_qos_mode_{"normal"};
   int num_cams_{0};
 
   // lidar params
@@ -525,9 +766,15 @@ private:
   std::string combined_dir_;
   int frame_count_{0};
 
+  // lidar bin saving params (uses save_interval_ and frame_count_ from camera saving)
+  bool save_lidar_bin_{false};
+  std::string lidar_output_dir_;
+
   // QoS
   rclcpp::QoS qos_{10};
   rmw_qos_profile_t rmw_qos_{rmw_qos_profile_default};
+  rclcpp::QoS qos_camera_{10};
+  rmw_qos_profile_t rmw_qos_camera_{rmw_qos_profile_default};
 
   // camera pubs
   std::vector<rclcpp::Publisher<ImageMsg>::SharedPtr> image_pubs_;

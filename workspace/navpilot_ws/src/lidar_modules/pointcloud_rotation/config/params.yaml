@@ -5,6 +5,7 @@ pointcloud_rotation_node:
     output_topic_ground: "/velodyne_points_rotated_notground"
     sensor_rotation_y_: 0.20944 #0.174533
     voxel_condition: true
+    robot_footprint_condition: false
     roi_max_x_: 10.0
     roi_max_y_: 8.0
     roi_max_z_: 0.5

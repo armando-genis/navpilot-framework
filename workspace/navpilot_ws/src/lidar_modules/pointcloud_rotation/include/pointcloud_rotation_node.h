@@ -12,6 +12,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
+#include <pcl/common/io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/crop_box.h>
@@ -70,6 +71,9 @@ private:
 
     bool voxel_condition = false;
 
+    // ============== variables for robot footprint condition  ==============
+    bool robot_footprint_condition = false;
+
     //  ==================  variables for ROI boundaries  ==================
     double roi_max_x_ = 0.0; // FRONT THE CAR
     double roi_max_y_ = 0.0; // LEFT THE CAR
@@ -90,6 +94,22 @@ private:
     float sensor_rotation_y_;
     Eigen::Matrix4f rotation_matrix_;
 
+    // Reusable point clouds (avoid per-callback allocation)
+    pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud_;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_cloud_;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_roi_;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud_;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr notground_points_;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr seed_points_;
+
+    // Reusable filters (avoid per-callback creation)
+    pcl::CropBox<pcl::PointXYZI> roi_filter_;
+    pcl::CropBox<pcl::PointXYZI> footprint_filter_;
+    pcl::VoxelGrid<pcl::PointXYZI> voxel_filter_;
+
+    // Reused for removeNaNFromPointCloud (avoid per-callback allocation)
+    std::vector<int> nan_indices_;
+
     // ============== variables for robot footprint  ==============
     float robot_footprint_x_max;
     float robot_footprint_y_max;
@@ -102,7 +122,6 @@ private:
     // functions
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
     visualization_msgs::msg::Marker createRobotFootprintMarker();
-    void removeRobotFootprintPoints(pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud);
     // subscriber & publisher
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_;
@@ -110,7 +129,7 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_marker_;
 
 public:
-    pointcloud_rotation_node(/* args */);
+    explicit pointcloud_rotation_node(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
     ~pointcloud_rotation_node();
 };
 

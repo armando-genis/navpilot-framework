@@ -83,7 +83,7 @@ def main(args=None):
         {
             "name": "obsbot",
             "topic": "racecar/camera/image_raw",
-            "pipeline": obsbot_mjpg_pipeline("/dev/video1", w=1920, h=1080, fps=FPS),
+            "pipeline": obsbot_mjpg_pipeline("/dev/video0", w=1920, h=1080, fps=FPS),
         },
         # {
         #     "name": "obsbot2",

@@ -32,7 +32,7 @@ services:
     networks:
       default: {}
       lidar_net:
-        ipv4_address: 192.168.1.100   # static IP for LiDAR access 
+        ipv4_address: 192.168.1.50   # static IP for LiDAR access 
 
 networks:
   default:
@@ -46,6 +46,7 @@ networks:
       config:
         - subnet: 192.168.1.0/24
           gateway: 192.168.1.1
+
 
 
 

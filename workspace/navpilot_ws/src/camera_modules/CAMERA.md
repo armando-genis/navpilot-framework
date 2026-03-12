@@ -91,7 +91,12 @@ To prevent the camera from continuously adjusting focus (which can cause unwante
 v4l2-ctl -d /dev/video0 -c focus_automatic_continuous=0
 
 # 2) Set a fixed manual focus value (range: 0-100)
-v4l2-ctl -d /dev/video0 -c focus_absolute=20
+v4l2-ctl -d /dev/video0 -c focus_absolute=10
+
+v4l2-ctl -d /dev/video2 -c focus_automatic_continuous=0
+
+# 2) Set a fixed manual focus value (range: 0-100)
+v4l2-ctl -d /dev/video2 -c focus_absolute=10
 ```
 
 **Note:** The focus value `30` is an example. Adjust this value (0-100) based on your desired focus distance. Lower values focus closer, higher values focus farther.

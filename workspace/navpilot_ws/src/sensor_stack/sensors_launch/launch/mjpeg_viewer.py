@@ -38,7 +38,7 @@ class MjpegMultiCameraViewer(Node):
         }
         
         # Parameters
-        self.declare_parameter('num_cameras', 3)
+        self.declare_parameter('num_cameras', 2)
         self.declare_parameter('show_combined', True)  # Show all cameras in one window
         self.declare_parameter('show_individual', False)  # Show each camera in separate window
         self.declare_parameter('scale_factor', 0.5)  # Scale down for display (0.5 = 50%)
@@ -269,3 +269,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

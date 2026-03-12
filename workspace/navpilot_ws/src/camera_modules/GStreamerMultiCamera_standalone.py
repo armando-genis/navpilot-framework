@@ -9,6 +9,9 @@ import os
 show_image = True
 save_images = True  # Enable/disable image saving
 
+# Combined view: max width in pixels (feeds are scaled to fit)
+COMBINED_VIEW_MAX_WIDTH = 1280
+
 
 def usb_v4l2_pipeline(dev="/dev/video0", w=1280, h=720, fps=30):
     return (
@@ -201,11 +204,11 @@ def main():
             "pipeline": obsbot_mjpg_pipeline("/dev/video0", w=1920, h=1080, fps=30),
             "fps": 30.0,
         },
-        # {
-        #     "name": "obsbot2",
-        #     "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=30),
-        #     "fps": 30.0,
-        # },
+        {
+            "name": "obsbot2",
+            "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=30),
+            "fps": 30.0,
+        },
     ]
     
     # Create combined images directory
@@ -232,6 +235,7 @@ def main():
         print("  'q' - Quit")
         print("  's' - Save current frames (individual + combined)")
         print("  'i' - Show statistics")
+        print(f"  Combined view: one window at max width {COMBINED_VIEW_MAX_WIDTH}px")
         print(f"\nSave directory: {os.path.abspath('cameraphotos')}")
         print()
         
@@ -255,10 +259,21 @@ def main():
                     )
                     frames_to_show.append((cam.name, frame))
             
-            # Display frames
+            # Display only the reduced-size combined view (no per-camera windows)
             if show_image and frames_to_show:
-                for name, frame in frames_to_show:
-                    cv2.imshow(name, frame)
+                frames_dict = {name: frame for name, frame in frames_to_show}
+                combined = combine_frames(frames_dict, layout='horizontal')
+                if combined is not None:
+                    h, w = combined.shape[:2]
+                    scale = min(COMBINED_VIEW_MAX_WIDTH / w, 1.0)
+                    if scale < 1.0:
+                        new_w, new_h = int(w * scale), int(h * scale)
+                        combined_small = cv2.resize(
+                            combined, (new_w, new_h), interpolation=cv2.INTER_AREA
+                        )
+                    else:
+                        combined_small = combined
+                    cv2.imshow("Combined", combined_small)
             
             # Handle keyboard input
             key = cv2.waitKey(1) & 0xFF
