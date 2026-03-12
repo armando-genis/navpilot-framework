@@ -36,9 +36,9 @@ if [ ! -d "ndt_omp_ros2" ]; then
     git clone https://github.com/rsasaki0109/ndt_omp_ros2
 fi
 
-if [ ! -d "lidar_localization_ros2" ]; then
-    git clone https://github.com/rsasaki0109/lidar_localization_ros2.git
-fi
+# if [ ! -d "lidar_localization_ros2" ]; then
+#     git clone https://github.com/rsasaki0109/lidar_localization_ros2.git
+# fi
 
 # hd map modules
 cd /workspace/navpilot_ws/src/hdmap_stack || { echo "Failed to cd to /workspace/navpilot_ws/src/hdmap_stack"; exit 1; }
