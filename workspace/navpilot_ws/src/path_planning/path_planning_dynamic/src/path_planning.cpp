@@ -1267,7 +1267,6 @@ int path_planning::generateTrajectoryTree_AStar_flat_map_with_waypoints(const St
     return best_goal_idx;
 }
 
-
 // =============================
 //  helper functions for the A* algorithm
 // =============================
@@ -1552,7 +1551,6 @@ void path_planning::publishBestPathFromFlat(const TreeFlat& flat, int leaf_idx, 
         real_trajectories_pub_2->publish(msg);
     }
 }
-
 
 void path_planning::publishAllPathsFromFlat(const TreeFlat& flat)
 {

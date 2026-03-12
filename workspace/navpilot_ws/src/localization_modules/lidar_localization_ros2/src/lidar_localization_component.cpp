@@ -250,6 +250,10 @@ void PCLLocalization::initializePubSub()
     "initial_map",
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
+  localization_status_pub_ = create_publisher<std_msgs::msg::Bool>(
+    "localization_valid",
+    rclcpp::QoS(10));
+
   initial_pose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "initialpose", rclcpp::SystemDefaultsQoS(),
     std::bind(&PCLLocalization::initialPoseReceived, this, std::placeholders::_1));
@@ -534,13 +538,22 @@ void PCLLocalization::cloudReceived(const sensor_msgs::msg::PointCloud2::ConstSh
 
   bool has_converged = registration_->hasConverged();
   double fitness_score = registration_->getFitnessScore();
+
+  std_msgs::msg::Bool status_msg;
   if (!has_converged) {
-    RCLCPP_WARN(get_logger(), "The registration didn't converge.");
+    RCLCPP_WARN(get_logger(), "Registration did not converge.");
+    status_msg.data = false;
+    localization_status_pub_->publish(status_msg);
     return;
   }
   if (fitness_score > score_threshold_) {
-    RCLCPP_WARN(get_logger(), "The fitness score is over %lf.", score_threshold_);
+    RCLCPP_WARN(get_logger(), "Localization failed. Fitness score: %f", fitness_score);
+    status_msg.data = false;
+    localization_status_pub_->publish(status_msg);
+    return;
   }
+  status_msg.data = true;
+  localization_status_pub_->publish(status_msg);
 
   Eigen::Matrix4f final_transformation = registration_->getFinalTransformation();
   Eigen::Matrix3d rot_mat = final_transformation.block<3, 3>(0, 0).cast<double>();
