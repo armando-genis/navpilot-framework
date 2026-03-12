@@ -85,9 +85,19 @@ pointcloud_rotation_node::pointcloud_rotation_node(const rclcpp::NodeOptions& op
     this->get_parameter("robot_footprint_z_min", robot_footprint_z_min);
 
 
-    sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(pointcloud_topic, 10, std::bind(&pointcloud_rotation_node::pointCloudCallback, this, std::placeholders::_1));
-    pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, 10);
-    pub_ground_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic_ground, 10);
+    auto sub_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
+
+    sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        pointcloud_topic,
+        sub_qos,
+        std::bind(&pointcloud_rotation_node::pointCloudCallback, this, std::placeholders::_1));
+
+    auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+
+    pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, qos);
+    pub_ground_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic_ground, qos);
+
+    
     pub_marker_ = this->create_publisher<visualization_msgs::msg::Marker>(robot_footprint_topic, 10);
 
     ROI_MAX_POINT = Eigen::Vector4f(roi_max_x_, roi_max_y_, roi_max_z_, 1);

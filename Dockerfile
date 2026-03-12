@@ -146,6 +146,7 @@ RUN apt-get update && \
         ros-${ROS_DISTRO}-grid-map-ros \
         ros-${ROS_DISTRO}-grid-map-cv \
         ros-${ROS_DISTRO}-xacro \
+        ros-${ROS_DISTRO}-tf2-ros \
         ros-${ROS_DISTRO}-cv-bridge && \
         rm -rf /var/lib/apt/lists/*
 

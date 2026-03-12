@@ -1,13 +1,14 @@
 /**:
   ros__parameters:
     registration_method: "NDT_OMP"
-    score_threshold: 2.0
-    ndt_resolution: 1.0
-    ndt_step_size: 0.1
-    ndt_num_threads: 4
+    score_threshold: 1.5
+    ndt_resolution: 2.0
+    ndt_step_size: 0.2
+    ndt_num_threads: 8
     transform_epsilon: 0.01
     voxel_leaf_size: 0.2
-    scan_max_range: 100.0
+    ndt_max_iterations: 50
+    scan_max_range: 90.0
     scan_min_range: 1.0
     scan_period: 0.1
     use_pcd_map: true
