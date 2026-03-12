@@ -25,7 +25,6 @@ workspace/TeraSim/**
 /workspace/navpilot_ws/src/mapping_modules/LIO-SAM/
 /workspace/navpilot_ws/src/sensor_stack/vectornav
 /workspace/navpilot_ws/src/sensor_stack/velodyne
-/workspace/navpilot_ws/src/localization_modules/lidar_localization_ros2
 /workspace/navpilot_ws/src/localization_modules/ndt_omp_ros2
 
 /workspace/vanttec_sdv_localization_20250623/
