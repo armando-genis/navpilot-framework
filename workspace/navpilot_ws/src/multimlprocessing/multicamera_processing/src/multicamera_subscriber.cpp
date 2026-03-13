@@ -13,8 +13,7 @@ MultiCameraSubscriber::MultiCameraSubscriber() : Node("multicamera_processing_no
 
   calib.load(calib_dir_);
 
-  rclcpp::QoS qos(rclcpp::KeepLast(1));
-  qos.best_effort();
+  auto qos = rclcpp::SensorDataQoS();
 
   for (int i = 0; i < num_cameras_; i++)
   {
