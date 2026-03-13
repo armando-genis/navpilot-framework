@@ -12,7 +12,10 @@ def generate_launch_description():
             parameters=[
                 # Multi-camera mode: provide list of video devices
                 # If you have more than one device, multi-camera mode will be activated
-                {"video_devices": ["/dev/video0", "/dev/video2", "/dev/video4"]}, 
+                {"video_devices": [
+                    "/dev/v4l/by-path/pci-0000:05:00.3-usb-0:1.4:1.0-video-index0",
+                    "/dev/v4l/by-path/pci-0000:05:00.3-usb-0:1.3:1.0-video-index0"
+                ]}, 
                 
                 # Synchronization settings
                 {"sync_enabled": False},  # True = synchronized publishing, False = independent publishing

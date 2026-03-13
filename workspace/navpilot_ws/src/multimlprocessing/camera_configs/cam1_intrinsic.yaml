@@ -1,0 +1,57 @@
+image_width: 1920
+image_height: 1080
+camera_name: camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+    - 1016.745773250475
+    - 0.0
+    - 948.8095723063169
+    - 0.0
+    - 1016.9571363996456
+    - 558.1439496704337
+    - 0.0
+    - 0.0
+    - 1.0
+distortion_model: equidistant
+distortion_coefficients:
+  rows: 4
+  cols: 1
+  data:
+    - 0.025795228709329925
+    - -0.02483016050494388
+    - -0.0829889355590592
+    - 0.027381405040512362
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+    - 1016.745773250475
+    - 0.0
+    - 948.8095723063169
+    - 0.0
+    - 0.0
+    - 1016.9571363996456
+    - 558.1439496704337
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+camera_type: fisheye
+num_images_used: 10
+mean_reprojection_error: 0.07425907206569653

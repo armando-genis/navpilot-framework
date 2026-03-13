@@ -171,7 +171,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
   else{
     publish_next_frame_ = true;
   }
-  const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
+  const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
 
   use_image_transport_ = declare_parameter("use_image_transport", true);
 
@@ -1045,7 +1045,7 @@ void V4L2Camera::startMultiCamera()
   multi_camera_transport_pubs_.clear();
   
   bool use_sensor_data_qos = get_parameter("use_sensor_data_qos").as_bool();
-  const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
+  const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
   
   // Pre-compute frame IDs and cache CameraInfo for each camera to avoid recreating each frame
   cached_camera_infos_.clear();
