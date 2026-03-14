@@ -83,13 +83,13 @@ def main(args=None):
         {
             "name": "obsbot",
             "topic": "racecar/camera/image_raw",
-            "pipeline": obsbot_mjpg_pipeline("/dev/video0", w=1920, h=1080, fps=FPS),
+            "pipeline": usb_v4l2_pipeline("/dev/video0", w=1920, h=1080, fps=FPS),
         },
-        # {
-        #     "name": "obsbot2",
-        #     "topic": "racecar/camera/image_raw2",
-        #     "pipeline": obsbot_mjpg_pipeline("/dev/video2", w=1920, h=1080, fps=FPS),
-        # },
+        {
+             "name": "obsbot2",
+             "topic": "racecar/camera/image_raw2",
+             "pipeline": usb_v4l2_pipeline("/dev/video2", w=1920, h=1080, fps=FPS),
+        },
     ]
 
 

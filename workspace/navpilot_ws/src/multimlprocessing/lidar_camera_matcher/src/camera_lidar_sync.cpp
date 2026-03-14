@@ -1,13 +1,3 @@
-/*
-@description:
-This node synchronizes camera_msg from different cameras based on their timestamps using message_filters.
-It subscribes to multiple camera topics, synchronizes the incoming messages, and republishes them on
-designated output topics.
-
-In the Case of only one camera, it simply republishes the incoming messages without synchronization.
-Is recommended to use when multiple cameras are used in the same application. use_image_transport_ = false;
-*/
-
 #include <rclcpp/rclcpp.hpp>
 
 #include <message_filters/subscriber.h>

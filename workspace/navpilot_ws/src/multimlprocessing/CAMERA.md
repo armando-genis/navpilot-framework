@@ -1,10 +1,15 @@
 colcon build --packages-select multicamera_processing
 colcon build --packages-select pointcloud_rotation
 colcon build --packages-select lidar_camera_matcher
+colcon build --packages-select multicamera_detection
 
 ros2 launch multicamera_processing multiprocessing.launch.py
 
+ros2 launch multicamera_detection multiprocessing.launch.py
+
 sudo apt install libyaml-cpp-dev
+
+ros2 launch obsbot_multicamera.launch.py
 
 ros2 launch obsbot_multicamera.launch.py
 

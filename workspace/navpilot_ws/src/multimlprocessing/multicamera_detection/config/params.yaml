@@ -1,0 +1,6 @@
+multicamera_detection_node:
+  ros__parameters:
+    num_cameras: 2
+    calib_dir: /workspace/navpilot_ws/src/multimlprocessing/camera_configs
+    model_path: "/workspace/navpilot_ws/src/multimlprocessing/modelexport/yolo26l-pose.onnx"
+    use_gpu: false

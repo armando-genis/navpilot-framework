@@ -1,0 +1,133 @@
+# ============================================================================
+# YOLOs-CPP .gitignore
+# ============================================================================
+
+# Build directories
+build/
+*/build/
+**/build/
+cmake-build-*/
+
+# MkDocs
+/site
+/site_raw
+/xml
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+compile_commands.json
+
+# Compiled binaries and objects
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+*.dSYM/
+
+# ONNX Runtime (downloaded separately)
+onnxruntime*/
+
+# Model files (download separately)
+*.onnx
+*.pt
+*.pth
+*.weights
+*.engine
+*.trt
+!models/*.names
+!quantized_models/*.names
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.gif
+!data/cover.png
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Cache files
+*.cache
+*.cache.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+ENV/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.sublime-*
+.cache/
+.ccls-cache/
+.clangd/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archive files
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Release assets (large model files - use GitHub Releases instead)
+release_assets/
+
+# Environment files
+.env
+.env.*
+
+# Benchmark results (keep structure, ignore data)
+results/*.csv
+results/*.json
+benchmark_unified/results/*.csv
+benchmark_unified/results/*.json
+!results/.gitkeep
+!benchmark_unified/results/.gitkeep
+
+# Test artifacts
+test/*/results/*.json
+test/*/results/*.png
+test/*/data/videos/*
+
+# Coverage and profiling
+*.gcda
+*.gcno
+*.gcov
+coverage/
+
+# Dev
+.cursor/
