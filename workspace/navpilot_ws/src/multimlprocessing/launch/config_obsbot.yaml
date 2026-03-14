@@ -1,0 +1,23 @@
+obsbot:
+  ros__parameters:
+    # Multi-camera mode: list of video devices
+    # With more than one device, multi-camera mode is activated
+    video_devices:
+      - "/dev/v4l/by-path/pci-0000:05:00.3-usb-0:1.4:1.0-video-index0"
+      - "/dev/v4l/by-path/pci-0000:05:00.3-usb-0:1.3:1.0-video-index0"
+
+    # Synchronization settings
+    sync_enabled: false # true = synchronized publishing, false = independent
+    sync_tolerance_ns: 100000000 # 100ms tolerance for USB cameras (50-100ms offset)
+    max_queue: 10 # Queue size per camera (> 1 second of frames)
+
+    # Applied to all cameras
+    image_size: [1920, 1080]
+    time_per_frame: [1, 15]
+    pixel_format: "MJPG"
+
+    # PERFORMANCE: Publish MJPG directly without RGB conversion
+    # rviz2, rqt_image_view support MJPG natively
+    output_encoding: "mjpeg" # "rgb8" for uncompressed RGB
+
+    buffer_queue_size: 1

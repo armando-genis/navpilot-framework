@@ -30,11 +30,13 @@ public:
         );
 
         cv::Mat R_lidar_T = R_lidar.t();
+        cv::Mat R_opencv_in_ = reshape_to_3x3(R_opencv_in);
+        cv::Mat R_robot_in_ = reshape_to_3x3(R_robot_in);
 
-        R_opencv = reshape_to_3x3(R_opencv_in) * R_lidar_T;
+        // R_opencv = R_opencv_in * R_lidar_T (matrix multiply, same as Python: R_base @ R_lidar.T)
+        cv::gemm(R_opencv_in_, R_lidar_T, 1.0, cv::Mat(), 0.0, R_opencv);
+        cv::gemm(R_robot_in_, R_lidar_T, 1.0, cv::Mat(), 0.0, R_robot);
         t_opencv = reshape_to_3x1(t_opencv_in);
-
-        R_robot = reshape_to_3x3(R_robot_in) * R_lidar_T;
         t_robot = reshape_to_3x1(t_robot_in);
     }
 
@@ -43,6 +45,8 @@ public:
 
     cv::Mat get_R_robot() const { return R_robot; }
     cv::Mat get_t_robot() const { return t_robot; }
+
+    const LidarRotation& get_lidar_rotation() const { return lidar_rotation; }
 
 private:
 

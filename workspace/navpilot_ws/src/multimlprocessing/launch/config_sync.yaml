@@ -1,0 +1,21 @@
+# Configuration for lidar_camera_matcher node
+# Synchronizes camera images and LiDAR using message_filters (single sync: lidar + cameras)
+
+lidar_camera_matcher:
+  ros__parameters:
+    # Camera topics - full input topic paths
+    cameras:
+      [
+        "/racecar/camera/camera_0/image_raw",
+        "/racecar/camera/camera_1/image_raw",
+      ]
+    # Suffix added to output topics (e.g., /camera_1_sync)
+    sync_suffix: "_sync"
+
+    # Synchronization settings
+    queue_size: 10
+
+    # LiDAR settings
+    use_lidar: true
+    lidar_topic_in: "/velodyne_points_rotated_notground"
+    lidar_topic_out: "/velodyne_points_rotated_notground_sync"

@@ -1,0 +1,15 @@
+lidar_rotation:
+  axis_x: 0.0
+  axis_y: 0.0
+  axis_z: 0.0
+
+# matain this in 0,0,0 even the lidar have a rotation alredy because the lidar points are rotated already
+base_footprint_to_lidar:
+  R:
+    rows: 3
+    cols: 3
+    data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  t:
+    rows: 3
+    cols: 1
+    data: [0.0, 0.0, 2.15]

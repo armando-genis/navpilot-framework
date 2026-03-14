@@ -45,6 +45,16 @@ public:
         return K;
     }
 
+    cv::Mat get_D() const
+    {
+        return D;
+    }
+
+    cv::Size get_frame_size() const
+    {
+        return frame_size;
+    }
+
     cv::Mat get_zero_distortion() const
     {
         return cv::Mat::zeros(5,1,CV_64F);

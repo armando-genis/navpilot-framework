@@ -50,6 +50,8 @@ public:
             }
         }
 
+        LidarRotation lidar_rotation = load_lidar_rotation(calib_dir);
+
         int max_cam = 0;
 
         if(!intrinsic_files.empty())
@@ -67,7 +69,7 @@ public:
                 camera_array[cam] = load_intrinsics(intrinsic_files[cam]);
 
             if(extrinsic_files.count(cam))
-                extrinsics_array[cam] = load_extrinsics(extrinsic_files[cam]);
+                extrinsics_array[cam] = load_extrinsics(extrinsic_files[cam], lidar_rotation);
         }
 
         std::cout << "Calibration intrinsic and extrinsic loaded successfully" << std::endl;
@@ -92,7 +94,45 @@ private:
         return std::make_shared<CameraUndistorter>(K.clone(),D.clone(),cv::Size(w,h));
     }
 
-    std::shared_ptr<CameraLidarExtrinsics> load_extrinsics(const std::string& path)
+    LidarRotation load_lidar_rotation(const std::string& calib_dir)
+    {
+        LidarRotation rot;
+        rot.axis_x = 0;
+        rot.axis_y = 0;
+        rot.axis_z = 0;
+
+        std::string lidar_config_path = std::string(calib_dir) + "/lidarConfig.yaml";
+        if (!fs::exists(lidar_config_path))
+        {
+            std::cout << "lidarConfig.yaml not found at " << lidar_config_path
+                      << ". Using lidar_rotation 0,0,0." << std::endl;
+            return rot;
+        }
+
+        try
+        {
+            YAML::Node data = YAML::LoadFile(lidar_config_path);
+            if (data["lidar_rotation"])
+            {
+                auto lr = data["lidar_rotation"];
+                rot.axis_x = lr["axis_x"].as<double>(0.0);
+                rot.axis_y = lr["axis_y"].as<double>(0.0);
+                rot.axis_z = lr["axis_z"].as<double>(0.0);
+            }
+            std::cout << "Loaded lidar_rotation from lidarConfig.yaml: axis_x=" << rot.axis_x
+                      << " axis_y=" << rot.axis_y << " axis_z=" << rot.axis_z << std::endl;
+        }
+        catch (const std::exception& e)
+        {
+            std::cout << "Failed to load lidarConfig.yaml: " << e.what()
+                      << ". Using lidar_rotation 0,0,0." << std::endl;
+        }
+        return rot;
+    }
+
+    std::shared_ptr<CameraLidarExtrinsics> load_extrinsics(
+        const std::string& path,
+        const LidarRotation& lidar_rotation)
     {
         YAML::Node data = YAML::LoadFile(path);
 
@@ -105,13 +145,8 @@ private:
         cv::Mat R_robot  = mat3(robot["R"]);
         cv::Mat t_robot  = vec3(robot["t"]);
 
-        LidarRotation rot;
-        rot.axis_x = 0;
-        rot.axis_y = 0;
-        rot.axis_z = 0;
-
         return std::make_shared<CameraLidarExtrinsics>(
-            R_opencv,t_opencv,R_robot,t_robot,rot
+            R_opencv, t_opencv, R_robot, t_robot, lidar_rotation
         );
     }
 

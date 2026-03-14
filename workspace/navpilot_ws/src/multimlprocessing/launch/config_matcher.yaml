@@ -1,5 +1,5 @@
 multicamera_processing_node:
   ros__parameters:
     num_cameras: 2
-    lidar_topic: /points_rotated
+    lidar_topic: /velodyne_points_rotated_notground_sync
     calib_dir: /workspace/navpilot_ws/src/multimlprocessing/camera_configs

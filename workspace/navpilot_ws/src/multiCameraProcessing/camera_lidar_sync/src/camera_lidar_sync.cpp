@@ -55,8 +55,6 @@ public:
     this->declare_parameter<std::vector<std::string>>("cameras", std::vector<std::string>{"/camera_0", "/camera_1"});
     this->declare_parameter<std::string>("sync_suffix", "_sync");
     this->declare_parameter<int>("queue_size", 10);
-    this->declare_parameter<std::string>("camera_qos_mode", "normal");  // "normal" or "qos"
-
     this->declare_parameter<bool>("use_lidar", false);
     this->declare_parameter<std::string>("lidar_topic_in", "/lidar/points");
     this->declare_parameter<std::string>("lidar_topic_out", "/lidar/points_sync");
@@ -80,8 +78,6 @@ public:
     this->get_parameter("cameras", cameras_);
     this->get_parameter("sync_suffix", sync_suffix_);
     this->get_parameter("queue_size", queue_size_);
-    this->get_parameter("camera_qos_mode", camera_qos_mode_);
-
     this->get_parameter("use_lidar", use_lidar_);
     this->get_parameter("lidar_topic_in", lidar_topic_in_);
     this->get_parameter("lidar_topic_out", lidar_topic_out_);
@@ -103,20 +99,11 @@ public:
     if (num_cams_ <= 0) throw std::runtime_error("cameras list must not be empty");
     if (num_cams_ > 5) throw std::runtime_error("This implementation supports 1..5 cameras");
 
-    qos_ = rclcpp::SensorDataQoS();
-    rmw_qos_ = qos_.get_rmw_qos_profile();
-
-    // Camera subscription QoS: "normal" (SensorDataQoS) or "qos" (BEST_EFFORT, KEEP_LAST, depth=1)
-    if (camera_qos_mode_ == "qos") {
-      qos_camera_ = rclcpp::QoS(1)
-        .reliability(rclcpp::ReliabilityPolicy::BestEffort)
-        .history(rclcpp::HistoryPolicy::KeepLast);
-      RCLCPP_INFO(get_logger(), "Camera QoS: qos (BEST_EFFORT, KEEP_LAST, depth=1)");
-    } else {
-      qos_camera_ = rclcpp::SensorDataQoS();
-      RCLCPP_INFO(get_logger(), "Camera QoS: normal (SensorDataQoS)");
-    }
-    rmw_qos_camera_ = qos_camera_.get_rmw_qos_profile();
+    auto qos = rclcpp::SensorDataQoS();
+    qos_ = qos;
+    qos_camera_ = qos;
+    rmw_qos_ = qos.get_rmw_qos_profile();
+    rmw_qos_camera_ = qos.get_rmw_qos_profile();
 
     // Create output directories if saving images or LiDAR
     if (save_images_ || save_lidar_bin_ || use_tf_) {
@@ -749,7 +736,6 @@ private:
   std::vector<std::string> cameras_;
   std::string sync_suffix_;
   int queue_size_{10};
-  std::string camera_qos_mode_{"normal"};
   int num_cams_{0};
 
   // lidar params

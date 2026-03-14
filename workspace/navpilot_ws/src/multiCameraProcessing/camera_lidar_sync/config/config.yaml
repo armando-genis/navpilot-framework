@@ -16,7 +16,6 @@ multi_camera_sync:
       [
         "/racecar/camera/camera_0/image_raw",
         "/racecar/camera/camera_1/image_raw",
-        "/racecar/camera/camera_2/image_raw",
       ]
     # Suffix added to output topics (e.g., /camera_1_sync, /raw/camera_front_sync)
     sync_suffix: "_sync"
@@ -28,8 +27,8 @@ multi_camera_sync:
 
     # LiDAR settings
     use_lidar: true # Enable LiDAR synchronization with cameras
-    lidar_topic_in: "/velodyne_points" # Input LiDAR topic
-    lidar_topic_out: "/velodyne_points_sync" # Output synchronized LiDAR topic
+    lidar_topic_in: "/points_rotated" # Input LiDAR topic
+    lidar_topic_out: "/points_rotated_sync" # Output synchronized LiDAR topic
     save_lidar_bin: true # Enable saving synchronized LiDAR to bin file
     lidar_output_dir: "/workspace/navpilot_ws/lidar_bins" # Where to save LiDAR .bin (same interval as cameras)
 
