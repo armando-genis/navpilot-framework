@@ -3,3 +3,5 @@ path_processing_node:
     num_cameras: 1
     calib_dir: /workspace/navpilot_ws/src/multimlprocessing/camera_configs
     waypoints_file_path: "/workspace/models/wp.csv"
+    global_frame_id: "map"
+    robot_frame_id: "velodyne"
