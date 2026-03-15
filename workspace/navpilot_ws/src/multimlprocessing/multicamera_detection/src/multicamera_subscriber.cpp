@@ -257,70 +257,89 @@ void MultiCameraSubscriber::inferenceLoop()
         auto pos3d = lidar_tree_.query(pf->camera_id, u, v);
         if (!pos3d) continue;
 
-        // ── 3D label (drawn on pf->image — survives the resize) ────────────
-        std::string label = cv::format("%.1f, %.1f, %.1f m",
-            pos3d->x, pos3d->y, pos3d->z);
+        // ── 3D label ─────────────────────────────────────────────────────────
+        std::string label = cv::format("%.1f, %.1f m", pos3d->x, pos3d->y);
         cv::putText(pf->image, label,
             cv::Point(static_cast<int>(u) - 40, static_cast<int>(v) - 10),
             cv::FONT_HERSHEY_SIMPLEX, 0.5, {0, 255, 255}, 1, cv::LINE_AA);
 
-        // ── Floor circle: project an ellipse at (x, y, z=0) ─────────────────
-        // We project a ring of 3D points at z=0 around the person's XY position
-        // and connect them as a polyline → looks like a circle on the ground
+        // ── Orientation ───────────────────────────────────────────────────────
+        auto yaw = computePersonOrientation(pose, pf->camera_id, sx, sy);
+
+        // ── Floor circle + arrow ──────────────────────────────────────────────
         if (has_calib)
         {
-          const float cx_K = static_cast<float>(K.at<double>(0, 2));
-          const float cy_K = static_cast<float>(K.at<double>(1, 2));
           const float fx_K = static_cast<float>(K.at<double>(0, 0));
           const float fy_K = static_cast<float>(K.at<double>(1, 1));
+          const float cx_K = static_cast<float>(K.at<double>(0, 2));
+          const float cy_K = static_cast<float>(K.at<double>(1, 2));
 
-          const float person_x = pos3d->x;
-          const float person_y = pos3d->y;
-          const float radius   = 0.4f;   // 40 cm radius circle on the floor
+          // Helper: project a 3D LiDAR point onto the image
+          auto project = [&](float wx, float wy, float wz) -> std::optional<cv::Point>
+          {
+            cv::Mat pt  = (cv::Mat_<double>(3,1) << wx, wy, wz);
+            cv::Mat cam = R * pt + t;
+            double Z = cam.at<double>(2);
+            if (Z <= 0.1) return std::nullopt;
+            int pu = static_cast<int>(fx_K * cam.at<double>(0) / Z + cx_K + 0.5f);
+            int pv = static_cast<int>(fy_K * cam.at<double>(1) / Z + cy_K + 0.5f);
+            return cv::Point{pu, pv};
+          };
+
+          const float radius   = 0.4f;
           const int   segments = 24;
+          const float px = pos3d->x, py = pos3d->y;
 
-          std::vector<cv::Point> ring_pts;
-          ring_pts.reserve(segments);
-
+          // Floor circle
+          std::vector<cv::Point> ring;
+          ring.reserve(segments);
+          bool ring_ok = true;
           for (int s = 0; s < segments; s++)
           {
             float angle = 2.0f * static_cast<float>(M_PI) * s / segments;
-            float wx = person_x + radius * std::cos(angle);
-            float wy = person_y + radius * std::sin(angle);
-            float wz = 0.0f;   // floor plane
-
-            // LiDAR world → camera frame
-            cv::Mat pt  = (cv::Mat_<double>(3,1) << wx, wy, wz);
-            cv::Mat cam = R * pt + t;
-
-            double X = cam.at<double>(0);
-            double Y = cam.at<double>(1);
-            double Z = cam.at<double>(2);
-
-            if (Z <= 0.1) { ring_pts.clear(); break; }  // circle behind camera
-
-            int pu = static_cast<int>(fx_K * X / Z + cx_K + 0.5f);
-            int pv = static_cast<int>(fy_K * Y / Z + cy_K + 0.5f);
-            ring_pts.push_back({pu, pv});
+            auto pt = project(px + radius * std::cos(angle),
+                              py + radius * std::sin(angle), 0.0f);
+            if (!pt) { ring_ok = false; break; }
+            ring.push_back(*pt);
           }
 
-          if (!ring_pts.empty())
+          if (ring_ok && !ring.empty())
           {
-            // Filled translucent circle overlay
             cv::Mat overlay = pf->image.clone();
-            std::vector<std::vector<cv::Point>> contours = {ring_pts};
+            std::vector<std::vector<cv::Point>> contours = {ring};
             cv::fillPoly(overlay, contours, cv::Scalar(0, 200, 255));
             cv::addWeighted(overlay, 0.25, pf->image, 0.75, 0, pf->image);
-
-            // Solid outline
-            for (int s = 0; s < static_cast<int>(ring_pts.size()); s++)
-              cv::line(pf->image,
-                  ring_pts[s],
-                  ring_pts[(s + 1) % ring_pts.size()],
+            for (int s = 0; s < segments; s++)
+              cv::line(pf->image, ring[s], ring[(s+1) % segments],
                   cv::Scalar(0, 200, 255), 2, cv::LINE_AA);
+          }
+
+          // Orientation arrow — drawn only if yaw is available
+          if (yaw)
+          {
+            const float arrow_len = 0.7f;   // 70 cm arrow on the floor
+            float tip_x = px + arrow_len * std::cos(*yaw);
+            float tip_y = py + arrow_len * std::sin(*yaw);
+
+            auto p_base = project(px,    py,    0.0f);
+            auto p_tip  = project(tip_x, tip_y, 0.0f);
+
+            if (p_base && p_tip)
+            {
+              cv::arrowedLine(pf->image, *p_base, *p_tip,
+                  cv::Scalar(0, 80, 255), 3, cv::LINE_AA, 0, 0.25);
+
+              // Yaw label
+              float deg = *yaw * 180.0f / static_cast<float>(M_PI);
+              cv::putText(pf->image,
+                  cv::format("%.0f deg", deg),
+                  cv::Point(p_tip->x + 5, p_tip->y),
+                  cv::FONT_HERSHEY_SIMPLEX, 0.45, {0, 80, 255}, 1, cv::LINE_AA);
+            }
           }
         }
       }
+
     }
 
     cv::putText(pf->image, "Camera " + std::to_string(pf->camera_id),
@@ -329,6 +348,50 @@ void MultiCameraSubscriber::inferenceLoop()
     cv::waitKey(1);
   }
 }
+
+// Returns yaw angle in radians (in LiDAR frame), or nullopt if not enough data.
+// Keypoint indices (COCO): 5=left_shoulder, 6=right_shoulder, 11=left_hip, 12=right_hip
+std::optional<float> MultiCameraSubscriber::computePersonOrientation(
+    const yolos::pose::PoseResult& pose,
+    int camera_id,
+    float sx, float sy)
+{
+  // Helper: query 3D position for a keypoint pixel
+  auto kpt3d = [&](int kpt_idx) -> std::optional<cv::Point3f>
+  {
+    if (kpt_idx >= static_cast<int>(pose.keypoints.size()))
+      return std::nullopt;
+
+    const auto& kpt = pose.keypoints[kpt_idx];
+    if (kpt.confidence < _CONF_THR) return std::nullopt;
+
+    float u = kpt.x * sx;
+    float v = kpt.y * sy;
+
+    return lidar_tree_.query(camera_id, u, v, 0.4f);
+  };
+
+  // Try shoulders first (indices 5=left, 6=right)
+  auto L = kpt3d(5);
+  auto R = kpt3d(6);
+
+  // Fallback to hips (11=left, 12=right)
+  if (!L || !R) { L = kpt3d(11); R = kpt3d(12); }
+
+  if (!L || !R) return std::nullopt;
+
+  // Vector from right to left shoulder/hip (in LiDAR XY plane)
+  float dx = L->x - R->x;
+  float dy = L->y - R->y;
+
+  // Perpendicular = facing direction (rotate 90 degrees)
+  // If left is to the camera-left of right, person faces "forward"
+  float facing_x = -dy;
+  float facing_y =  dx;
+
+  return std::atan2(facing_y, facing_x);   // yaw in radians
+}
+
 
 cv::Mat MultiCameraSubscriber::projectLidarOnImage(
     const cv::Mat& img,

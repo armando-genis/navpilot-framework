@@ -41,6 +41,9 @@ private:
       const cv::Mat& t,
       const cv::Mat& K);
 
+  std::optional<float> computePersonOrientation(
+      const yolos::pose::PoseResult& pose,
+      int camera_id, float sx, float sy);
 
   int num_cameras_;
   std::string calib_dir_;
