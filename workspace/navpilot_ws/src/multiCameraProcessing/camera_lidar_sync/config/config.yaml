@@ -22,8 +22,6 @@ multi_camera_sync:
 
     # Synchronization settings
     queue_size: 10 # Message queue size for synchronizer
-    # Camera subscription QoS: "normal" (default SensorDataQoS) or "qos" (BEST_EFFORT, KEEP_LAST, depth=1 to match mjpeg viewers)
-    camera_qos_mode: "normal"
 
     # LiDAR settings
     use_lidar: true # Enable LiDAR synchronization with cameras
@@ -42,7 +40,7 @@ multi_camera_sync:
     #   output_dir/combined/    - Combined horizontal view (combined_00001.jpg)
 
     # TF settings
-    use_tf: false # Enable TF synchronization
+    use_tf: true # Enable TF synchronization
     tf_global_frame: "map"
     tf_lidar_frame: "velodyne"
     tf_output_dir: "/workspace/navpilot_ws/tf_yaml" # Where to save TF yaml files

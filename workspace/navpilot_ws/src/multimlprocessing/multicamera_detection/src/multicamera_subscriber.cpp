@@ -63,11 +63,13 @@ MultiCameraSubscriber::MultiCameraSubscriber() : Node("multicamera_detection_nod
   this->declare_parameter<std::string>("calib_dir", "");
   this->declare_parameter<std::string>("model_path", "");
   this->declare_parameter<bool>("use_gpu", false);
+  this->declare_parameter<bool>("enable_yaw", false);
   this->declare_parameter<std::string>("lidar_topic", "");
   num_cameras_ = this->get_parameter("num_cameras").as_int();
   calib_dir_ = this->get_parameter("calib_dir").as_string();
   model_path_ = this->get_parameter("model_path").as_string();
   use_gpu_ = this->get_parameter("use_gpu").as_bool();
+  enable_yaw_ = this->get_parameter("enable_yaw").as_bool();
   lidar_topic_ = this->get_parameter("lidar_topic").as_string();
 
   std::cout << "lidar_topic:" << lidar_topic_ <<std::endl;
@@ -207,31 +209,28 @@ void MultiCameraSubscriber::inferenceLoop()
       tree_dirty_ = false;
     }
 
-    // ── LiDAR overlay ────────────────────────────────────────────────────────
-    if (pf->cloud &&
-        static_cast<size_t>(pf->camera_id) < calib.extrinsics_array.size() &&
-        static_cast<size_t>(pf->camera_id) < calib.camera_array.size())
-    {
-      auto& ext = calib.extrinsics_array[pf->camera_id];
-      auto& cam = calib.camera_array[pf->camera_id];
-      if (ext && cam)
-        pf->image = projectLidarOnImage(pf->image, pf->cloud,
-            ext->get_R_opencv(), ext->get_t_opencv(), cam->get_K());
-    }
-
     // ── Detect poses ─────────────────────────────────────────────────────────
     if (detector_)
     {
-      cv::Mat resized;
-      cv::resize(pf->image, resized, cv::Size(640, 640));
-      auto poses = detector_->detect(resized);
-      detector_->drawPoses(resized, poses);
+      const int orig_w = pf->image.cols;
+      const int orig_h = pf->image.rows;
 
-      // ── Scale back FIRST — everything draws on pf->image after this ────────
-      cv::resize(resized, pf->image, cv::Size(pf->image.cols, pf->image.rows));
+      // Letterbox to 640x640 preserving aspect ratio
+      float scale = std::min(640.0f / orig_w, 640.0f / orig_h);
+      int scaled_w = static_cast<int>(orig_w * scale);
+      int scaled_h = static_cast<int>(orig_h * scale);
+      int pad_x = (640 - scaled_w) / 2;
+      int pad_y = (640 - scaled_h) / 2;
 
-      float sx = static_cast<float>(pf->image.cols) / 640.0f;
-      float sy = static_cast<float>(pf->image.rows) / 640.0f;
+      cv::Mat letterboxed(640, 640, pf->image.type(), cv::Scalar(114, 114, 114));
+      cv::Mat roi = letterboxed(cv::Rect(pad_x, pad_y, scaled_w, scaled_h));
+      cv::resize(pf->image, roi, cv::Size(scaled_w, scaled_h));
+
+      auto poses = detector_->detect(letterboxed);
+      detector_->drawPoses(letterboxed, poses);
+
+      // Scale letterboxed back to original size for display
+      cv::resize(letterboxed, pf->image, cv::Size(orig_w, orig_h));
 
       // ── Get extrinsics once for floor projection ──────────────────────────
       cv::Mat R, t, K;
@@ -251,8 +250,9 @@ void MultiCameraSubscriber::inferenceLoop()
 
       for (const auto& pose : poses)
       {
-        float u = (pose.box.x + pose.box.width  * 0.5f) * sx;
-        float v = (pose.box.y + pose.box.height * 0.5f) * sy;
+        // Map box center from letterboxed 640x640 space back to original image space
+        float u = (pose.box.x + pose.box.width  * 0.5f - pad_x) / scale;
+        float v = (pose.box.y + pose.box.height * 0.5f - pad_y) / scale;
 
         auto pos3d = lidar_tree_.query(pf->camera_id, u, v);
         if (!pos3d) continue;
@@ -263,8 +263,10 @@ void MultiCameraSubscriber::inferenceLoop()
             cv::Point(static_cast<int>(u) - 40, static_cast<int>(v) - 10),
             cv::FONT_HERSHEY_SIMPLEX, 0.5, {0, 255, 255}, 1, cv::LINE_AA);
 
-        // ── Orientation ───────────────────────────────────────────────────────
-        auto yaw = computePersonOrientation(pose, pf->camera_id, sx, sy);
+        // ── Orientation (only if enable_yaw_ is true) ─────────────────────────
+        std::optional<float> yaw;
+        if (enable_yaw_)
+          yaw = computePersonOrientation(pose, pf->camera_id, scale, pad_x, pad_y);
 
         // ── Floor circle + arrow ──────────────────────────────────────────────
         if (has_calib)
@@ -314,10 +316,10 @@ void MultiCameraSubscriber::inferenceLoop()
                   cv::Scalar(0, 200, 255), 2, cv::LINE_AA);
           }
 
-          // Orientation arrow — drawn only if yaw is available
-          if (yaw)
+          // Orientation arrow — drawn only if enable_yaw_ and yaw is available
+          if (enable_yaw_ && yaw)
           {
-            const float arrow_len = 0.7f;   // 70 cm arrow on the floor
+            const float arrow_len = 0.7f;
             float tip_x = px + arrow_len * std::cos(*yaw);
             float tip_y = py + arrow_len * std::sin(*yaw);
 
@@ -329,7 +331,6 @@ void MultiCameraSubscriber::inferenceLoop()
               cv::arrowedLine(pf->image, *p_base, *p_tip,
                   cv::Scalar(0, 80, 255), 3, cv::LINE_AA, 0, 0.25);
 
-              // Yaw label
               float deg = *yaw * 180.0f / static_cast<float>(M_PI);
               cv::putText(pf->image,
                   cv::format("%.0f deg", deg),
@@ -339,8 +340,20 @@ void MultiCameraSubscriber::inferenceLoop()
           }
         }
       }
-
     }
+
+
+    // // ── LiDAR overlay ────────────────────────────────────────────────────────
+    // if (pf->cloud &&
+    //     static_cast<size_t>(pf->camera_id) < calib.extrinsics_array.size() &&
+    //     static_cast<size_t>(pf->camera_id) < calib.camera_array.size())
+    // {
+    //   auto& ext = calib.extrinsics_array[pf->camera_id];
+    //   auto& cam = calib.camera_array[pf->camera_id];
+    //   if (ext && cam)
+    //     pf->image = projectLidarOnImage(pf->image, pf->cloud,
+    //         ext->get_R_opencv(), ext->get_t_opencv(), cam->get_K());
+    // }
 
     cv::putText(pf->image, "Camera " + std::to_string(pf->camera_id),
         {20, 40}, cv::FONT_HERSHEY_SIMPLEX, 1.0, {0, 255, 0}, 2);
@@ -354,15 +367,18 @@ void MultiCameraSubscriber::inferenceLoop()
 std::optional<float> MultiCameraSubscriber::computePersonOrientation(
     const yolos::pose::PoseResult& pose,
     int camera_id,
-    float sx, float sy)
+    float scale, int pad_x, int pad_y)
 {
+  // Map keypoint from letterboxed 640x640 space back to original image space
   auto kpt3d = [&](int kpt_idx) -> std::optional<cv::Point3f>
   {
     if (kpt_idx >= static_cast<int>(pose.keypoints.size()))
       return std::nullopt;
     const auto& kpt = pose.keypoints[kpt_idx];
     if (kpt.confidence < _CONF_THR) return std::nullopt;
-    return lidar_tree_.query(camera_id, kpt.x * sx, kpt.y * sy, 0.4f);
+    float x = (kpt.x - pad_x) / scale;
+    float y = (kpt.y - pad_y) / scale;
+    return lidar_tree_.query(camera_id, x, y, 0.4f);
   };
 
   // Shoulder or hip vector
@@ -371,41 +387,30 @@ std::optional<float> MultiCameraSubscriber::computePersonOrientation(
   if (!L || !R) { L = kpt3d(11); R = kpt3d(12); }  // fallback: hips
   if (!L || !R) return std::nullopt;
 
-  // Midpoint between the two anchors (shoulder/hip center)
   cv::Point3f mid(
       (L->x + R->x) * 0.5f,
       (L->y + R->y) * 0.5f,
       (L->z + R->z) * 0.5f);
 
-  // Spine axis: left-to-right across the body
-  float dx = R->x - L->x;   // R - L so cross product gives a consistent normal
+  float dx = R->x - L->x;
   float dy = R->y - L->y;
 
-  // Two candidate facing directions (perpendiculars to the shoulder axis)
   float facing_x =  dy;
   float facing_y = -dx;
 
-  // ── Disambiguate using nose (kpt 0) ──────────────────────────────────────
-  // The nose should be in FRONT of the shoulder midpoint.
-  // Project nose onto the two candidates and pick the one that agrees.
+  // Disambiguate using nose (kpt 0)
   auto nose3d = kpt3d(0);
   if (nose3d)
   {
     float nose_dx = nose3d->x - mid.x;
     float nose_dy = nose3d->y - mid.y;
-
-    // Dot product: positive means nose is on the same side as facing direction
     float dot = nose_dx * facing_x + nose_dy * facing_y;
     if (dot < 0.0f)
     {
-      // Nose is behind — flip 180°
       facing_x = -facing_x;
       facing_y = -facing_y;
     }
   }
-  // If nose is not visible (person facing away), the shoulder vector alone
-  // still gives a valid axis — just with unknown front/back, which is
-  // acceptable for a rear-facing person.
 
   return std::atan2(facing_y, facing_x);
 }

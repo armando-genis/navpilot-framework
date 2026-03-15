@@ -43,13 +43,14 @@ private:
 
   std::optional<float> computePersonOrientation(
       const yolos::pose::PoseResult& pose,
-      int camera_id, float sx, float sy);
+      int camera_id, float scale, int pad_x, int pad_y);
 
   int num_cameras_;
   std::string calib_dir_;
   std::string lidar_topic_;
   std::string model_path_;
   bool use_gpu_;
+  bool enable_yaw_{false};
   std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> subscribers_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr lidar_sub_;
 

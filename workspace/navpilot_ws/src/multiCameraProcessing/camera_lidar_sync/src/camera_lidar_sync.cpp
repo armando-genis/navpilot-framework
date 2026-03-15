@@ -101,9 +101,9 @@ public:
 
     auto qos = rclcpp::SensorDataQoS();
     qos_ = qos;
-    qos_camera_ = qos;
+    qos_camera_ = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
     rmw_qos_ = qos.get_rmw_qos_profile();
-    rmw_qos_camera_ = qos.get_rmw_qos_profile();
+    rmw_qos_camera_ = qos_camera_.get_rmw_qos_profile();
 
     // Create output directories if saving images or LiDAR
     if (save_images_ || save_lidar_bin_ || use_tf_) {
