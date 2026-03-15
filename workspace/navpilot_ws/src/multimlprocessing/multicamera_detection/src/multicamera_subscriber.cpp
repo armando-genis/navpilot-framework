@@ -356,40 +356,58 @@ std::optional<float> MultiCameraSubscriber::computePersonOrientation(
     int camera_id,
     float sx, float sy)
 {
-  // Helper: query 3D position for a keypoint pixel
   auto kpt3d = [&](int kpt_idx) -> std::optional<cv::Point3f>
   {
     if (kpt_idx >= static_cast<int>(pose.keypoints.size()))
       return std::nullopt;
-
     const auto& kpt = pose.keypoints[kpt_idx];
     if (kpt.confidence < _CONF_THR) return std::nullopt;
-
-    float u = kpt.x * sx;
-    float v = kpt.y * sy;
-
-    return lidar_tree_.query(camera_id, u, v, 0.4f);
+    return lidar_tree_.query(camera_id, kpt.x * sx, kpt.y * sy, 0.4f);
   };
 
-  // Try shoulders first (indices 5=left, 6=right)
-  auto L = kpt3d(5);
-  auto R = kpt3d(6);
-
-  // Fallback to hips (11=left, 12=right)
-  if (!L || !R) { L = kpt3d(11); R = kpt3d(12); }
-
+  // Shoulder or hip vector
+  auto L = kpt3d(5);   // left shoulder
+  auto R = kpt3d(6);   // right shoulder
+  if (!L || !R) { L = kpt3d(11); R = kpt3d(12); }  // fallback: hips
   if (!L || !R) return std::nullopt;
 
-  // Vector from right to left shoulder/hip (in LiDAR XY plane)
-  float dx = L->x - R->x;
-  float dy = L->y - R->y;
+  // Midpoint between the two anchors (shoulder/hip center)
+  cv::Point3f mid(
+      (L->x + R->x) * 0.5f,
+      (L->y + R->y) * 0.5f,
+      (L->z + R->z) * 0.5f);
 
-  // Perpendicular = facing direction (rotate 90 degrees)
-  // If left is to the camera-left of right, person faces "forward"
-  float facing_x = -dy;
-  float facing_y =  dx;
+  // Spine axis: left-to-right across the body
+  float dx = R->x - L->x;   // R - L so cross product gives a consistent normal
+  float dy = R->y - L->y;
 
-  return std::atan2(facing_y, facing_x);   // yaw in radians
+  // Two candidate facing directions (perpendiculars to the shoulder axis)
+  float facing_x =  dy;
+  float facing_y = -dx;
+
+  // ── Disambiguate using nose (kpt 0) ──────────────────────────────────────
+  // The nose should be in FRONT of the shoulder midpoint.
+  // Project nose onto the two candidates and pick the one that agrees.
+  auto nose3d = kpt3d(0);
+  if (nose3d)
+  {
+    float nose_dx = nose3d->x - mid.x;
+    float nose_dy = nose3d->y - mid.y;
+
+    // Dot product: positive means nose is on the same side as facing direction
+    float dot = nose_dx * facing_x + nose_dy * facing_y;
+    if (dot < 0.0f)
+    {
+      // Nose is behind — flip 180°
+      facing_x = -facing_x;
+      facing_y = -facing_y;
+    }
+  }
+  // If nose is not visible (person facing away), the shoulder vector alone
+  // still gives a valid axis — just with unknown front/back, which is
+  // acceptable for a rear-facing person.
+
+  return std::atan2(facing_y, facing_x);
 }
 
 

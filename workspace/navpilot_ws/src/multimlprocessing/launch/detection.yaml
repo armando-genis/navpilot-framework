@@ -2,6 +2,6 @@ multicamera_detection_node:
   ros__parameters:
     num_cameras: 1
     calib_dir: /workspace/navpilot_ws/src/multimlprocessing/camera_configs
-    model_path: "/workspace/models/yolo26l-pose.onnx"
+    model_path: "/workspace/models/yolo26x-pose.onnx"
     use_gpu: false
     lidar_topic: /velodyne_points_rotated_notground_sync

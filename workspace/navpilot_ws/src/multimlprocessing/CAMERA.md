@@ -2,6 +2,7 @@ colcon build --packages-select multicamera_processing
 colcon build --packages-select pointcloud_rotation
 colcon build --packages-select lidar_camera_matcher
 colcon build --packages-select multicamera_detection
+colcon build --packages-select path_processing
 
 ros2 launch multicamera_processing multiprocessing.launch.py
 
