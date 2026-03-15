@@ -19,3 +19,7 @@ colcon build --packages-select path_planning_dynamic
 ros2 launch /workspace/navpilot_ws/src/path_planning/launch/planning_obstacles.launch.py
 
 rviz2 -d /workspace/navpilot_ws/src/path_planning/path_planning_viz.rviz
+
+colcon build --packages-select waypoints_simple_creator
+
+ros2 launch waypoints_simple_creator waypoints.launch.py
