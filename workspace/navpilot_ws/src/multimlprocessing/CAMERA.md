@@ -22,6 +22,8 @@ ros2 launch pointcloud_rotation lidar_rotation.launch.py
 
 ros2 launch lidar_camera_matcher sync.launch.py
 
+ros2 launch path_processing multiprocessing.launch.py
+
 find /dev -maxdepth 1 -name "video\*"
 
 ```bash

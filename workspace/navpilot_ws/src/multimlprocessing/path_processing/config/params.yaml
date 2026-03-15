@@ -1,4 +1,5 @@
 path_processing_node:
   ros__parameters:
-    num_cameras: 2
+    num_cameras: 1
     calib_dir: /workspace/navpilot_ws/src/multimlprocessing/camera_configs
+    waypoints_file_path: "/workspace/models/wp.csv"

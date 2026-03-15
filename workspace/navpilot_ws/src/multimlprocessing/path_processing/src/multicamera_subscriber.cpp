@@ -1,6 +1,8 @@
 #include "multicamera_subscriber.hpp"
 
 #include <iomanip>
+#include <fstream>
+#include <sstream>
 
 namespace path_processing
 {
@@ -60,10 +62,13 @@ MultiCameraSubscriber::MultiCameraSubscriber() : Node("path_processing_node")
 {
   this->declare_parameter<int>("num_cameras", 3);
   this->declare_parameter<std::string>("calib_dir", "");
+  this->declare_parameter<std::string>("waypoints_file_path", "");
   num_cameras_ = this->get_parameter("num_cameras").as_int();
   calib_dir_ = this->get_parameter("calib_dir").as_string();
+  waypoints_file_path_ = this->get_parameter("waypoints_file_path").as_string();
 
   calib.load(calib_dir_);
+  readWaypoints();
 
   if (static_cast<size_t>(0) < calib.camera_array.size() && calib.camera_array[0])
   {
@@ -112,6 +117,45 @@ MultiCameraSubscriber::MultiCameraSubscriber() : Node("path_processing_node")
   }
 
   cv::namedWindow("MultiCamera", cv::WINDOW_NORMAL);
+}
+
+void MultiCameraSubscriber::readWaypoints()
+{
+  if (waypoints_file_path_.empty())
+  {
+    RCLCPP_WARN(this->get_logger(), "Waypoints file path is empty, skipping load");
+    return;
+  }
+
+  std::ifstream file(waypoints_file_path_);
+  if (!file.is_open())
+  {
+    RCLCPP_ERROR(this->get_logger(), "Failed to open file: %s", waypoints_file_path_.c_str());
+    return;
+  }
+
+  std::string line;
+  // Skip the header line
+  std::getline(file, line);
+
+  waypoints_.clear();
+  while (std::getline(file, line))
+  {
+    std::stringstream ss(line);
+    std::string value;
+    Eigen::VectorXd waypoint(6);  // x, y, z, yaw, velocity, change_flag
+
+    for (int i = 0; i < 6; ++i)
+    {
+      std::getline(ss, value, ',');
+      waypoint(i) = std::stod(value);
+    }
+
+    waypoints_.push_back(waypoint);
+  }
+
+  file.close();
+  RCLCPP_INFO(this->get_logger(), "Loaded %zu waypoints from %s", waypoints_.size(), waypoints_file_path_.c_str());
 }
 
 void MultiCameraSubscriber::imageCallback(
