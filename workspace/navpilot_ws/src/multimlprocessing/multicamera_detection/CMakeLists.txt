@@ -16,8 +16,12 @@ find_package(cv_bridge REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(PCL REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters cuda)
 
-add_executable(multicamera_detection_node src/multicamera_subscriber.cpp)
+add_executable(multicamera_detection_node src/multicamera_subscriber.cpp src/LidarCameraTree.cpp)
 
 ament_target_dependencies(
   multicamera_detection_node
@@ -25,6 +29,7 @@ ament_target_dependencies(
   rclcpp
   sensor_msgs
   cv_bridge
+  pcl_conversions
 )
 
 # Include YOLOs-CPP headers
@@ -60,6 +65,7 @@ target_link_libraries(multicamera_detection_node
   Eigen3::Eigen
   yaml-cpp
   yolos
+  ${PCL_LIBRARIES}
 )
 
 install(TARGETS

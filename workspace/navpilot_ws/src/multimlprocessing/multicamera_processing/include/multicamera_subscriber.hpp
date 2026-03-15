@@ -42,7 +42,8 @@ private:
       const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
       const cv::Mat& R,
       const cv::Mat& t,
-      const cv::Mat& K);
+      const cv::Mat& K,
+      bool debug_print = false);
 
   CalibrationLoader calib;
 
