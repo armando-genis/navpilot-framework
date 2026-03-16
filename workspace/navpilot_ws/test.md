@@ -23,3 +23,19 @@ rviz2 -d /workspace/navpilot_ws/src/path_planning/path_planning_viz.rviz
 colcon build --packages-select waypoints_simple_creator
 
 ros2 launch waypoints_simple_creator waypoints.launch.py
+
+# lidar modules
+
+colcon build --packages-select pointcloud_clustering
+colcon build --packages-select pointcloud_clustering_KDTree
+colcon build --packages-select pointcloud_rotation
+
+# camera modules
+
+colcon build --packages-select v4l2_Multicamera --cmake-clean-cache --cmake-args -DENABLE_CUDA=OFF
+
+#processing
+colcon build --packages-select multicamera_processing
+colcon build --packages-select lidar_camera_matcher
+colcon build --packages-select multicamera_detection
+colcon build --packages-select path_processing
