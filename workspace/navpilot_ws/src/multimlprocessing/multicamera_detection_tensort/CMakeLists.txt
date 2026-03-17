@@ -11,6 +11,7 @@ find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # External dependencies
 find_package(Eigen3 REQUIRED)
@@ -21,6 +22,19 @@ find_package(PCL REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters cuda)
 
+# TensorRT YOLO
+set(TENSORRT_ROOT /usr)
+set(TensorRT_ROOT /usr)
+
+set(YOLO_TRT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../YOLOv8-TensorRT-CPP)
+
+# Must come BEFORE add_subdirectory so nested CMake can find FindTensorRT.cmake
+list(APPEND CMAKE_MODULE_PATH 
+    "${YOLO_TRT_DIR}/libs/tensorrt-cpp-api/cmake"
+)
+
+add_subdirectory(${YOLO_TRT_DIR} ${CMAKE_CURRENT_BINARY_DIR}/yolo_trt_build)
+
 add_executable(multicamera_detection_tensort_node src/multicamera_subscriber.cpp src/LidarCameraTree.cpp)
 
 ament_target_dependencies(
@@ -30,6 +44,11 @@ ament_target_dependencies(
   sensor_msgs
   cv_bridge
   pcl_conversions
+  visualization_msgs
+)
+
+include_directories(
+  ${YOLO_TRT_DIR}/src
 )
 
 target_include_directories(multicamera_detection_tensort_node PUBLIC
@@ -47,7 +66,14 @@ target_link_libraries(multicamera_detection_tensort_node
   ${OpenCV_LIBS}
   Eigen3::Eigen
   yaml-cpp
+  YoloV8_TRT
   ${PCL_LIBRARIES}
+)
+
+set_target_properties(multicamera_detection_tensort_node PROPERTIES
+  INSTALL_RPATH
+    "${CMAKE_BINARY_DIR}/yolo_trt_build;${CMAKE_BINARY_DIR}/yolo_trt_build/libs/tensorrt-cpp-api"
+  BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 install(TARGETS

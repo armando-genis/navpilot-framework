@@ -1,0 +1,7 @@
+multicamera_detection_tensort_node:
+  ros__parameters:
+    num_cameras: 1
+    calib_dir: /home/vanttec2/navpilot-framework/workspace/navpilot_ws/src/multimlprocessing/camera_configs
+    model_path: "/home/vanttec2/navpilot-framework/workspace/models/yolov8n-pose.onnx"
+    use_gpu: false
+    lidar_topic: /velodyne_points_rotated_notground_sync

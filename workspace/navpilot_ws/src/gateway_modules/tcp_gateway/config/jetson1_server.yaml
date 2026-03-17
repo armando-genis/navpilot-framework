@@ -1,0 +1,32 @@
+/**:
+  ros__parameters:
+    # ── Role ──────────────────────────────────────────────────────────
+    # true  → Jetson-1: SERVER. Listens for incoming connection.
+    #          SENDS PointCloud2 + TF to Jetson-2.
+    #          RECEIVES MarkerArray + Image from Jetson-2.
+    # false → Jetson-2: CLIENT. Connects to the server.
+    #          SENDS MarkerArray + Image to Jetson-1.
+    #          RECEIVES PointCloud2 + TF from Jetson-1.
+    server: true
+
+    # ── Network ───────────────────────────────────────────────────────
+    # remote_ip is only used when server: false (the client needs to know where to connect).
+    # When server: true this field is ignored.
+    remote_ip: "192.168.1.2"
+    port: 5002
+
+    # ── Topic names ───────────────────────────────────────────────────
+    # The gateway publishes received messages on the SAME topic name it
+    # subscribes to locally.  Both sides must agree on these names.
+
+    # PointCloud2 topic (LiDAR).  Jetson-1 subscribes & sends; Jetson-2 publishes.
+    lidar_topic: "/velodyne_points"
+
+    # TF topic.  Jetson-1 subscribes & sends; Jetson-2 publishes.
+    tf_topic: "/tf"
+
+    # MarkerArray topic.  Jetson-2 subscribes & sends; Jetson-1 publishes.
+    marker_arr_topic: "/marker_array"
+
+    # Image topic.  Jetson-2 subscribes & sends; Jetson-1 publishes.
+    image_topic: "/camera/image_raw"
