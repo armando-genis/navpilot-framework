@@ -4,6 +4,11 @@ colcon build --packages-select lidar_camera_matcher
 colcon build --packages-select multicamera_detection
 colcon build --packages-select path_processing
 
+colcon build --packages-select multicamera_detection_tensort
+
+
+colcon build --packages-select multicamera_detection_tensort
+
 ros2 launch multicamera_processing multiprocessing.launch.py
 
 ros2 launch multicamera_detection multiprocessing.launch.py

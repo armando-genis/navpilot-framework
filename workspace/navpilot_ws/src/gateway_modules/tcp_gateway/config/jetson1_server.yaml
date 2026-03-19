@@ -8,6 +8,7 @@
     #          SENDS MarkerArray + Image to Jetson-1.
     #          RECEIVES PointCloud2 + TF from Jetson-1.
     server: true
+    restamp_on_receive: true
 
     # ── Network ───────────────────────────────────────────────────────
     # remote_ip is only used when server: false (the client needs to know where to connect).
@@ -20,13 +21,13 @@
     # subscribes to locally.  Both sides must agree on these names.
 
     # PointCloud2 topic (LiDAR).  Jetson-1 subscribes & sends; Jetson-2 publishes.
-    lidar_topic: "/velodyne_points"
+    lidar_topic: "/velodyne_points_rotated_notground"
 
     # TF topic.  Jetson-1 subscribes & sends; Jetson-2 publishes.
     tf_topic: "/tf"
 
     # MarkerArray topic.  Jetson-2 subscribes & sends; Jetson-1 publishes.
-    marker_arr_topic: "/marker_array"
+    marker_arr_topic: "/detected_persons_markers"
 
     # Image topic.  Jetson-2 subscribes & sends; Jetson-1 publishes.
     image_topic: "/camera/image_raw"

@@ -1,6 +1,5 @@
 # Configuration for lidar_camera_matcher node
 # Synchronizes camera images and LiDAR using message_filters (single sync: lidar + cameras)
-
 lidar_camera_matcher:
   ros__parameters:
     # Camera topics - full input topic paths
@@ -9,13 +8,30 @@ lidar_camera_matcher:
         "/racecar/camera/camera_0/image_raw",
         "/racecar/camera/camera_1/image_raw",
       ]
-    # Suffix added to output topics (e.g., /camera_1_sync)
+
+    restamp_inputs: true
+
+    # Suffix added to output topics (e.g., /racecar/camera/camera_0/image_raw_sync)
     sync_suffix: "_sync"
 
-    # Synchronization settings
-    queue_size: 10
+    # Synchronization queue size — large enough to absorb TCP jitter bursts
+    queue_size: 100              # was 50 — camera_0 can be 267ms late, needs more buffer
+    cam_min_dt_initial: 0.060    # just below camera min=65ms from your hz output
+    lidar_min_dt_initial: 0.085  # just below lidar min=90ms from your hz output
+    rate_slack: 0.5
 
     # LiDAR settings
     use_lidar: true
-    lidar_topic_in: "/velodyne_points_rotated_notground"
+    lidar_topic_in:  "/velodyne_points_rotated_notground"
     lidar_topic_out: "/velodyne_points_rotated_notground_sync"
+
+    # Initial rate guesses — replaced automatically by runtime measurement.
+    # Set these close to your real hardware rates so the first few syncs
+    # work correctly before enough stamps are collected.
+    cam_hz_initial:   15.0   # your cameras run ~15 fps (unstable but ~15)
+    lidar_hz_initial: 10.0   # velodyne default, auto-adapts if you change it
+
+    # Sliding window for rate averaging.
+    # 10 = stable estimate, adapts within ~10 frames of a rate change.
+    # Lower (e.g. 5) = faster adaptation but noisier estimate.
+    rate_window: 10

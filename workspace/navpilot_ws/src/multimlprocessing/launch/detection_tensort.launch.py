@@ -69,7 +69,7 @@ def generate_launch_description():
     )
 
     # ld.add_action(obsbot_node)
-    ld.add_action(lidar_rotation_node)
+    # ld.add_action(lidar_rotation_node)
     ld.add_action(lidar_camera_matcher_node)
     ld.add_action(detection_processing_node)
 

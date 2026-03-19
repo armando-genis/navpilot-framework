@@ -5,23 +5,24 @@
     #          SENDS MarkerArray + Image to Jetson-1.
     #          RECEIVES PointCloud2 + TF from Jetson-1.
     server: false
+    restamp_on_receive: true
 
     # ── Network ───────────────────────────────────────────────────────
     # IP address of Jetson-1 (the server). Change to your actual IP.
-    remote_ip: "192.168.1.1"
+    remote_ip: "192.168.1.100"
     port: 5002
 
     # ── Topic names ───────────────────────────────────────────────────
     # Must match the names configured on Jetson-1.
 
     # PointCloud2 topic – Jetson-2 will publish what it receives here.
-    lidar_topic: "/velodyne_points"
+    lidar_topic: "/velodyne_points_rotated_notground"
 
     # TF topic – Jetson-2 will publish what it receives here.
     tf_topic: "/tf"
 
     # MarkerArray topic – Jetson-2 subscribes to this and sends it across.
-    marker_arr_topic: "/marker_array"
+    marker_arr_topic: "/detected_persons_markers"
 
     # Image topic – Jetson-2 subscribes to this and sends it across.
     image_topic: "/camera/image_raw"

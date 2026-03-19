@@ -124,7 +124,7 @@ MultiCameraSubscriber::MultiCameraSubscriber() : Node("multicamera_detection_ten
   marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
       "/detected_persons_markers", pub_qos);
 
-  cv::namedWindow("MultiCamera", cv::WINDOW_NORMAL);
+  // cv::namedWindow("MultiCamera", cv::WINDOW_NORMAL);
 
   infer_thread_ = std::thread(&MultiCameraSubscriber::inferenceLoop, this);
 }
@@ -254,17 +254,8 @@ void MultiCameraSubscriber::inferenceLoop()
 
       // ── Publish MarkerArray ───────────────────────────────────────────────
       visualization_msgs::msg::MarkerArray marker_array;
+      const std::string marker_ns = "camera_" + std::to_string(pf->camera_id);
 
-      // First add a DELETE_ALL marker to wipe previous frame's markers
-      visualization_msgs::msg::Marker clear_marker;
-      clear_marker.header.frame_id = "velodyne";
-      clear_marker.header.stamp    = this->now();
-      clear_marker.ns              = "detected_persons";
-      clear_marker.id              = 0;
-      clear_marker.action          = visualization_msgs::msg::Marker::DELETEALL;
-      marker_array.markers.push_back(clear_marker);
-
-      // Now add one marker per detection
       int marker_id = 0;
       for (const auto& det : detections)
       {
@@ -277,32 +268,29 @@ void MultiCameraSubscriber::inferenceLoop()
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id    = "velodyne";
         marker.header.stamp       = this->now();
-        marker.ns                 = "detected_persons";
-        marker.id                 = marker_id++;          // 0, 1, 2... per frame
+        marker.ns                 = marker_ns;
+        marker.id                 = marker_id++;
         marker.type               = visualization_msgs::msg::Marker::CYLINDER;
         marker.action             = visualization_msgs::msg::Marker::ADD;
-
-        // Same center the floor circle uses
         marker.pose.position.x    = pos3d->x;
         marker.pose.position.y    = pos3d->y;
         marker.pose.position.z    = pos3d->z + 0.9f;
         marker.pose.orientation.w = 1.0;
-
-        marker.scale.x            = 0.8f;   // diameter = 2 * floor circle radius
+        marker.scale.x            = 0.8f;
         marker.scale.y            = 0.8f;
         marker.scale.z            = 1.8f;
-
         marker.color.r            = 1.0f;
         marker.color.g            = 0.5f;
         marker.color.b            = 0.0f;
         marker.color.a            = 0.6f;
-
+        // Auto-expires after 0.5s — no stale markers, no DELETEALL needed
         marker.lifetime           = rclcpp::Duration::from_seconds(0.5);
-
         marker_array.markers.push_back(marker);
       }
 
-      marker_pub_->publish(marker_array);  // always publish, even if only DELETEALL
+      // Only publish if there are actual detections — no empty/DELETEALL spam
+      if (!marker_array.markers.empty())
+        marker_pub_->publish(marker_array);
 
       // image procesing
 
@@ -386,10 +374,10 @@ void MultiCameraSubscriber::inferenceLoop()
       }
     }
 
-    cv::putText(pf->image, "Camera " + std::to_string(pf->camera_id),
-        {20, 40}, cv::FONT_HERSHEY_SIMPLEX, 1.0, {0,255,0}, 2);
-    cv::imshow("Camera " + std::to_string(pf->camera_id), pf->image);
-    cv::waitKey(1);
+    // cv::putText(pf->image, "Camera " + std::to_string(pf->camera_id),
+    //     {20, 40}, cv::FONT_HERSHEY_SIMPLEX, 1.0, {0,255,0}, 2);
+    // cv::imshow("Camera " + std::to_string(pf->camera_id), pf->image);
+    // cv::waitKey(1);
   }
 }
 
